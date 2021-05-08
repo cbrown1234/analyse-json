@@ -1,0 +1,1 @@
+Analyse (ND)JSON files and return useful metadata about the structure
