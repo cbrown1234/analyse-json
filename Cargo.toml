@@ -9,3 +9,4 @@ edition = "2018"
 [dependencies]
 serde_json = "1.0"
 itertools = "*"
+structopt = "0.3.13"
