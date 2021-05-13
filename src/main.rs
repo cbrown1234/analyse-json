@@ -1,5 +1,5 @@
-use serde_json::Value;
 use itertools::sorted;
+use serde_json::Value;
 
 fn main() {
     let contents = std::fs::read_to_string("test_data/some_data.json").unwrap();
@@ -17,7 +17,7 @@ fn main() {
         line_count += 1;
     }
 
-    let keys = sorted(keys_count.keys()); 
+    let keys = sorted(keys_count.keys());
     println!("Keys:\n{:#?}", keys);
     println!("Key value counts:\n{:#?}", keys_count);
     for (k, v) in keys_count {
