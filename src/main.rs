@@ -13,18 +13,19 @@ fn main() {
     for line in content.lines() {
         let v: Value = serde_json::from_str(line).unwrap();
 
-        for (key, _) in v.as_object().unwrap() {
+        for key in parse_json_paths(&v).iter() {
             let counter = keys_count.entry(key.to_owned()).or_insert(0);
             *counter += 1;
         }
         line_count += 1;
 
-        println!("{:#?}", parse_json_paths(&v));
+        // println!("{:#?}", parse_json_paths(&v));
     }
 
     let keys = sorted(keys_count.keys());
     println!("Keys:\n{:#?}", keys);
     println!("Key value counts:\n{:#?}", keys_count);
+    println!("Key occurance:");
     for (k, v) in keys_count {
         println!("{}: {}%", k, 100f64 * v as f64 / line_count as f64)
     }
