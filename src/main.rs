@@ -1,8 +1,8 @@
 use itertools::sorted;
 use serde_json::Value;
-use structopt::StructOpt;
 use std::fs::File;
 use std::io::{self, prelude::*};
+use structopt::StructOpt;
 
 fn main() {
     let args = Cli::from_args();
@@ -16,8 +16,9 @@ fn main() {
     for line in reader.lines() {
         line_count += 1;
         let line = line.expect(&format!("Failed to read line {}", line_count));
-        
-        let v: Value = serde_json::from_str(&line).expect(&format!("Failed to parse JSON on line {}", line_count));
+
+        let v: Value = serde_json::from_str(&line)
+            .expect(&format!("Failed to parse JSON on line {}", line_count));
 
         for key in v.paths().iter() {
             let counter = keys_count.entry(key.to_owned()).or_insert(0);
@@ -45,7 +46,6 @@ impl Paths for Value {
         parse_json_paths(&self)
     }
 }
-
 
 fn parse_json_paths(json: &Value) -> Vec<String> {
     let root = String::from("$");
