@@ -1,23 +1,28 @@
 use itertools::sorted;
 use serde_json::Value;
 use structopt::StructOpt;
+use std::fs::File;
+use std::io::{self, prelude::*};
 
 fn main() {
     let args = Cli::from_args();
 
-    let content = std::fs::read_to_string(&args.file_path).expect("could not read file");
+    let file = File::open(&args.file_path).expect("could not read file");
+    let reader = io::BufReader::new(file);
 
     let mut keys_count = std::collections::HashMap::new();
     let mut line_count: i64 = 0;
 
-    for line in content.lines() {
-        let v: Value = serde_json::from_str(line).unwrap();
+    for line in reader.lines() {
+        line_count += 1;
+        let line = line.expect(&format!("Failed to read line {}", line_count));
+        
+        let v: Value = serde_json::from_str(&line).expect(&format!("Failed to parse JSON on line {}", line_count));
 
-        for key in parse_json_paths(&v).iter() {
+        for key in v.paths().iter() {
             let counter = keys_count.entry(key.to_owned()).or_insert(0);
             *counter += 1;
         }
-        line_count += 1;
 
         // println!("{:#?}", parse_json_paths(&v));
     }
@@ -30,6 +35,17 @@ fn main() {
         println!("{}: {}%", k, 100f64 * v as f64 / line_count as f64)
     }
 }
+
+trait Paths {
+    fn paths(&self) -> Vec<String>;
+}
+
+impl Paths for Value {
+    fn paths(&self) -> Vec<String> {
+        parse_json_paths(&self)
+    }
+}
+
 
 fn parse_json_paths(json: &Value) -> Vec<String> {
     let root = String::from("$");
