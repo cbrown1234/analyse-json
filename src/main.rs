@@ -12,13 +12,19 @@ fn main() {
 
     let mut keys_count = std::collections::HashMap::new();
     let mut line_count: i64 = 0;
+    let mut bad_lines = Vec::new();
 
     for line in reader.lines() {
         line_count += 1;
         let line = line.expect(&format!("Failed to read line {}", line_count));
 
-        let v: Value = serde_json::from_str(&line)
-            .expect(&format!("Failed to parse JSON on line {}", line_count));
+        let v: Value = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(_) => {
+                bad_lines.push(line_count);
+                continue;
+            }
+        };
 
         for key in v.paths().iter() {
             let counter = keys_count.entry(key.to_owned()).or_insert(0);
@@ -35,6 +41,8 @@ fn main() {
     for (k, v) in keys_count {
         println!("{}: {}%", k, 100f64 * v as f64 / line_count as f64)
     }
+    println!("Corrupted lines:");
+    println!("{:?}", bad_lines);
 }
 
 trait Paths {
