@@ -45,3 +45,65 @@ pub mod paths {
         }
     }
 }
+
+pub mod ndjson {
+    use serde_json::Value;
+    use std::io::{self, prelude::*};
+    use std::{collections::HashMap, fs::File};
+    pub struct FileStats {
+        pub keys_count: HashMap<String, i32>,
+        pub line_count: i64,
+        pub bad_lines: Vec<i64>,
+    }
+
+    impl FileStats {
+        fn new() -> FileStats {
+            FileStats {
+                keys_count: std::collections::HashMap::new(),
+                line_count: 0,
+                bad_lines: Vec::new(),
+            }
+        }
+
+        pub fn key_occurance(&self) -> HashMap<String, f64> {
+            self.keys_count
+                .iter()
+                .map(|(k, v)| (k.to_owned(), 100f64 * *v as f64 / self.line_count as f64))
+                .collect()
+        }
+    }
+
+    pub fn parse_ndjson_file(file: File) -> FileStats {
+        let mut fs = FileStats::new();
+        let reader = io::BufReader::new(file);
+
+        for line in reader.lines() {
+            fs.line_count += 1;
+            let line = line.expect(&format!("Failed to read line {}", fs.line_count));
+
+            let v: Value = match serde_json::from_str(&line) {
+                Ok(v) => v,
+                Err(_) => {
+                    fs.bad_lines.push(fs.line_count);
+                    continue;
+                }
+            };
+
+            for key in v.paths().iter() {
+                let counter = fs.keys_count.entry(key.to_owned()).or_insert(0);
+                *counter += 1;
+            }
+        }
+        fs
+    }
+
+    pub trait Paths {
+        fn paths(&self) -> Vec<String>;
+    }
+
+    impl Paths for Value {
+        fn paths(&self) -> Vec<String> {
+            super::paths::parse_json_paths(&self)
+        }
+    }
+}
