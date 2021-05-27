@@ -4,6 +4,8 @@ use std::fs::File;
 use std::io::{self, prelude::*};
 use structopt::StructOpt;
 
+mod json;
+
 fn main() {
     let args = Cli::from_args();
 
@@ -30,8 +32,6 @@ fn main() {
             let counter = keys_count.entry(key.to_owned()).or_insert(0);
             *counter += 1;
         }
-
-        // println!("{:#?}", parse_json_paths(&v));
     }
 
     let keys = sorted(keys_count.keys());
@@ -51,38 +51,8 @@ trait Paths {
 
 impl Paths for Value {
     fn paths(&self) -> Vec<String> {
-        parse_json_paths(&self)
+        json::paths::parse_json_paths(&self)
     }
-}
-
-fn parse_json_paths(json: &Value) -> Vec<String> {
-    let root = String::from("$");
-    let mut paths = Vec::new();
-    _parse_json_paths(json, root, &mut paths);
-    paths
-}
-
-fn _parse_json_paths<'a>(
-    json: &Value,
-    root: String,
-    paths: &'a mut Vec<String>,
-) -> &'a mut Vec<String> {
-    match json {
-        Value::Object(map) => {
-            for (k, v) in map {
-                let mut obj_root = root.clone();
-                obj_root.push_str(".");
-                obj_root.push_str(k);
-                _parse_json_paths(v, obj_root, paths);
-            }
-        }
-        Value::Null => paths.push(root),
-        Value::Bool(_) => paths.push(root),
-        Value::Number(_) => paths.push(root),
-        Value::String(_) => paths.push(root),
-        Value::Array(_) => paths.push(root),
-    }
-    paths
 }
 
 #[derive(StructOpt)]
