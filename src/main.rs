@@ -1,4 +1,3 @@
-use itertools::sorted;
 use std::fs::File;
 use structopt::StructOpt;
 
@@ -11,15 +10,7 @@ fn main() {
 
     let file_stats = json::ndjson::parse_ndjson_file(file);
 
-    let keys = sorted(file_stats.keys_count.keys());
-    println!("Keys:\n{:#?}", keys);
-    println!("Key value counts:\n{:#?}", file_stats.keys_count);
-    println!("Key occurance:");
-    for (k, v) in file_stats.key_occurance() {
-        println!("{}: {}%", k, v)
-    }
-    println!("Corrupted lines:");
-    println!("{:?}", file_stats.bad_lines);
+    println!("{}", file_stats);
 }
 
 #[derive(StructOpt)]

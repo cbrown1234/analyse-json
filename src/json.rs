@@ -48,8 +48,11 @@ pub mod paths {
 
 pub mod ndjson {
     use serde_json::Value;
-    use std::io::{self, prelude::*};
     use std::{collections::HashMap, fs::File};
+    use std::{
+        fmt,
+        io::{self, prelude::*},
+    };
     pub struct FileStats {
         pub keys_count: HashMap<String, i32>,
         pub line_count: i64,
@@ -70,6 +73,18 @@ pub mod ndjson {
                 .iter()
                 .map(|(k, v)| (k.to_owned(), 100f64 * *v as f64 / self.line_count as f64))
                 .collect()
+        }
+    }
+
+    impl fmt::Display for FileStats {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+            writeln!(f, "Keys:\n{:#?}\n", self.keys_count.keys())?;
+            writeln!(f, "Key occurance counts:\n{:#?}", self.keys_count)?;
+            write!(f, "Key occurance rate:\n")?;
+            for (k, v) in self.key_occurance() {
+                writeln!(f, "{}: {}%", k, v)?;
+            }
+            writeln!(f, "Corrupted lines:\n{:?}", self.bad_lines)
         }
     }
 
