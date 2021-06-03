@@ -1,5 +1,5 @@
-use std::process;
 use analyse_json::Cli;
+use std::process;
 use structopt::StructOpt;
 
 fn main() {
@@ -11,5 +11,3 @@ fn main() {
         process::exit(1);
     }
 }
-
-

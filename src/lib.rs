@@ -10,7 +10,7 @@ pub struct Cli {
     file_path: std::path::PathBuf,
 }
 
-pub fn run(args: Cli)  -> Result<(), Box<dyn Error>> {
+pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
     let file = File::open(&args.file_path)?;
 
     let file_stats = json::ndjson::parse_ndjson_file(file);
@@ -19,4 +19,3 @@ pub fn run(args: Cli)  -> Result<(), Box<dyn Error>> {
 
     Ok(())
 }
-
