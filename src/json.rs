@@ -22,11 +22,11 @@ pub mod paths {
                     _parse_json_paths(v, obj_root, paths);
                 }
             }
-            Value::Null => paths.push(root),
-            Value::Bool(_) => paths.push(root),
-            Value::Number(_) => paths.push(root),
-            Value::String(_) => paths.push(root),
-            Value::Array(_) => paths.push(root),
+            Value::Null
+            | Value::Bool(_)
+            | Value::Number(_)
+            | Value::String(_)
+            | Value::Array(_) => paths.push(root),
         }
         paths
     }
