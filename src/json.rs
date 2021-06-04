@@ -33,15 +33,23 @@ pub mod paths {
 
     #[cfg(test)]
     mod tests {
+        use super::*;
         use std::str::FromStr;
 
         use serde_json::Value;
         #[test]
-        fn test_parse_json_paths() {
+        fn typical_parse_json_paths() {
             let v = Value::from_str("{\"key1\": \"value1\", \"key2\": {\"subkey1\": \"value1\"}}")
                 .unwrap();
             let v_expected = vec![String::from("$.key1"), String::from("$.key2.subkey1")];
-            assert_eq!(super::parse_json_paths(&v), v_expected);
+            assert_eq!(parse_json_paths(&v), v_expected);
+        }
+
+        #[test]
+        fn trivial_parse_json_paths() {
+            let v = Value::from_str("1").unwrap();
+            let v_expected = vec![String::from("$")];
+            assert_eq!(parse_json_paths(&v), v_expected);
         }
     }
 }
@@ -53,6 +61,8 @@ pub mod ndjson {
         fmt,
         io::{self, prelude::*},
     };
+
+    #[derive(Debug, PartialEq, Default)]
     pub struct FileStats {
         pub keys_count: HashMap<String, i32>,
         pub line_count: i64,
@@ -119,6 +129,50 @@ pub mod ndjson {
     impl Paths for Value {
         fn paths(&self) -> Vec<String> {
             super::paths::parse_json_paths(&self)
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use std::fs::File;
+        use std::io::{Seek, SeekFrom, Write};
+
+        #[test]
+        fn simple_ndjson_file() {
+            let mut tmpfile: File = tempfile::tempfile().unwrap();
+            writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
+            writeln!(tmpfile, r#"{{"key2": 123}}"#).unwrap();
+            writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
+            tmpfile.seek(SeekFrom::Start(0)).unwrap();
+
+            let expected = FileStats {
+                keys_count: [("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]
+                    .iter()
+                    .cloned()
+                    .collect(),
+                line_count: 3,
+                ..Default::default()
+            };
+
+            let file_stats = parse_ndjson_file(tmpfile);
+            assert_eq!(expected, file_stats);
+        }
+
+        #[test]
+        fn bad_ndjson_file() {
+            let mut tmpfile: File = tempfile::tempfile().unwrap();
+            writeln!(tmpfile, "{{").unwrap();
+            tmpfile.seek(SeekFrom::Start(0)).unwrap();
+
+            let expected = FileStats {
+                bad_lines: vec![1],
+                line_count: 1,
+                ..Default::default()
+            };
+
+            let file_stats = parse_ndjson_file(tmpfile);
+            assert_eq!(expected, file_stats);
         }
     }
 }
