@@ -2,7 +2,7 @@ use std::error::Error;
 use std::fs::File;
 use structopt::StructOpt;
 
-mod json;
+pub mod json;
 
 #[derive(StructOpt)]
 pub struct Cli {
