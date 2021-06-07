@@ -16,7 +16,7 @@ fn _parse_json_paths<'a>(
         Value::Object(map) => {
             for (k, v) in map {
                 let mut obj_root = root.clone();
-                obj_root.push_str(".");
+                obj_root.push('.');
                 obj_root.push_str(k);
                 _parse_json_paths(v, obj_root, paths);
             }

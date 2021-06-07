@@ -33,7 +33,7 @@ impl fmt::Display for FileStats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(f, "Keys:\n{:#?}\n", self.keys_count.keys())?;
         writeln!(f, "Key occurance counts:\n{:#?}", self.keys_count)?;
-        write!(f, "Key occurance rate:\n")?;
+        writeln!(f, "Key occurance rate:")?;
         for (k, v) in self.key_occurance() {
             writeln!(f, "{}: {}%", k, v)?;
         }
@@ -47,7 +47,7 @@ pub fn parse_ndjson_file(file: File) -> FileStats {
 
     for line in reader.lines() {
         fs.line_count += 1;
-        let line = line.expect(&format!("Failed to read line {}", fs.line_count));
+        let line = line.unwrap_or_else(|_| panic!("Failed to read line {}", fs.line_count));
 
         let v: Value = match serde_json::from_str(&line) {
             Ok(v) => v,
