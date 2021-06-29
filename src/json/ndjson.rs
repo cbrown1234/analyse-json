@@ -7,9 +7,9 @@ use std::{
 
 #[derive(Debug, PartialEq, Default)]
 pub struct FileStats {
-    pub keys_count: HashMap<String, i32>,
-    pub line_count: i64,
-    pub bad_lines: Vec<i64>,
+    pub keys_count: HashMap<String, usize>,
+    pub line_count: usize,
+    pub bad_lines: Vec<usize>,
 }
 
 impl FileStats {
@@ -45,14 +45,15 @@ pub fn parse_ndjson_file(file: File) -> FileStats {
     let mut fs = FileStats::new();
     let reader = io::BufReader::new(file);
 
-    for line in reader.lines() {
-        fs.line_count += 1;
-        let line = line.unwrap_or_else(|_| panic!("Failed to read line {}", fs.line_count));
+    for (i, line) in reader.lines().enumerate() {
+        let line_number = i+1;
+        fs.line_count = line_number;
+        let line = line.unwrap_or_else(|_| panic!("Failed to read line {}", line_number));
 
         let v: Value = match serde_json::from_str(&line) {
             Ok(v) => v,
             Err(_) => {
-                fs.bad_lines.push(fs.line_count);
+                fs.bad_lines.push(line_number);
                 continue;
             }
         };
