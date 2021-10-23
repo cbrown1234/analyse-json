@@ -46,7 +46,7 @@ pub fn parse_ndjson_file(file: File) -> FileStats {
     let reader = io::BufReader::new(file);
 
     for (i, line) in reader.lines().enumerate() {
-        let line_number = i+1;
+        let line_number = i + 1;
         fs.line_count = line_number;
         let line = line.unwrap_or_else(|_| panic!("Failed to read line {}", line_number));
 

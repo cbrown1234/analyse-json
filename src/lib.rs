@@ -9,9 +9,9 @@ pub mod json;
 pub struct Cli {
     #[structopt(parse(from_os_str))]
     file_path: Option<std::path::PathBuf>,
-    
+
     #[structopt(short, long)]
-    glob: Option<String>
+    glob: Option<String>,
 }
 
 pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
@@ -29,7 +29,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                     let file = File::open(path)?;
                     let file_stats = json::ndjson::parse_ndjson_file(file);
                     println!("{}", file_stats);
-                },
+                }
                 Err(e) => eprintln!("Error reading glob entry: {:?}", e),
             }
         }
