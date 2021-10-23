@@ -73,26 +73,26 @@ fn _parse_json_paths_types<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::str::FromStr;
 
-    use serde_json::Value;
+    use serde_json::json;
+
     #[test]
     fn typical_parse_json_paths() {
-        let v = Value::from_str(r#"{"key1": "value1", "key2": {"subkey1": "value1"}}"#).unwrap();
+        let v = json!({"key1": "value1", "key2": {"subkey1": "value1"}});
         let out_expected = vec![String::from("$.key1"), String::from("$.key2.subkey1")];
         assert_eq!(parse_json_paths(&v), out_expected);
     }
 
     #[test]
     fn trivial_parse_json_paths() {
-        let v = Value::from_str("1").unwrap();
+        let v = json!(1);
         let out_expected = vec![String::from("$")];
         assert_eq!(parse_json_paths(&v), out_expected);
     }
 
     #[test]
     fn typical_parse_json_paths_types() {
-        let v = Value::from_str(r#"{"key1": "value1", "key2": {"subkey1": ["value1"]}}"#).unwrap();
+        let v = json!({"key1": "value1", "key2": {"subkey1": ["value1"]}});
         let mut out_expected = IndexMap::new();
         out_expected.insert("$.key1".to_string(), "String".to_string());
         out_expected.insert("$.key2.subkey1".to_string(), "Array".to_string());
@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn trivial_parse_json_paths_types() {
-        let v = Value::from_str("1").unwrap();
+        let v = json!(1);
         let mut out_expected = IndexMap::new();
         out_expected.insert("$".to_string(), "Number".to_string());
         assert_eq!(parse_json_paths_types(&v), out_expected);
