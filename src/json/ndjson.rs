@@ -1,5 +1,6 @@
-use serde_json::Value;
-use std::{collections::HashMap, fs::File};
+use super::IndexMap;
+pub use serde_json::Value;
+use std::fs::File;
 use std::{
     fmt,
     io::{self, prelude::*},
@@ -7,22 +8,31 @@ use std::{
 
 #[derive(Debug, PartialEq, Default)]
 pub struct FileStats {
-    pub keys_count: HashMap<String, usize>,
+    pub keys_count: IndexMap<String, usize>,
     pub line_count: usize,
     pub bad_lines: Vec<usize>,
+    pub keys_types_count: IndexMap<String, usize>,
 }
 
 impl FileStats {
     fn new() -> FileStats {
         FileStats {
-            keys_count: std::collections::HashMap::new(),
+            keys_count: IndexMap::new(),
             line_count: 0,
             bad_lines: Vec::new(),
+            keys_types_count: IndexMap::new(),
         }
     }
 
-    pub fn key_occurance(&self) -> HashMap<String, f64> {
+    pub fn key_occurance(&self) -> IndexMap<String, f64> {
         self.keys_count
+            .iter()
+            .map(|(k, v)| (k.to_owned(), 100f64 * *v as f64 / self.line_count as f64))
+            .collect()
+    }
+
+    pub fn key_type_occurance(&self) -> IndexMap<String, f64> {
+        self.keys_types_count
             .iter()
             .map(|(k, v)| (k.to_owned(), 100f64 * *v as f64 / self.line_count as f64))
             .collect()
@@ -35,6 +45,10 @@ impl fmt::Display for FileStats {
         writeln!(f, "Key occurance counts:\n{:#?}", self.keys_count)?;
         writeln!(f, "Key occurance rate:")?;
         for (k, v) in self.key_occurance() {
+            writeln!(f, "{}: {}%", k, v)?;
+        }
+        writeln!(f, "Key type occurance rate:")?;
+        for (k, v) in self.key_type_occurance() {
             writeln!(f, "{}: {}%", k, v)?;
         }
         writeln!(f, "Corrupted lines:\n{:?}", self.bad_lines)
@@ -62,6 +76,12 @@ pub fn parse_ndjson_file(file: File) -> FileStats {
             let counter = fs.keys_count.entry(key.to_owned()).or_insert(0);
             *counter += 1;
         }
+
+        for (k, v) in v.paths_types().iter() {
+            let path_type = format!("{}::{}", k, v);
+            let counter = fs.keys_types_count.entry(path_type).or_insert(0);
+            *counter += 1;
+        }
     }
     fs
 }
@@ -73,6 +93,16 @@ pub trait Paths {
 impl Paths for Value {
     fn paths(&self) -> Vec<String> {
         super::paths::parse_json_paths(&self)
+    }
+}
+
+pub trait PathsTypes {
+    fn paths_types(&self) -> IndexMap<String, String>;
+}
+
+impl PathsTypes for Value {
+    fn paths_types(&self) -> IndexMap<String, String> {
+        super::paths::parse_json_paths_types(&self)
     }
 }
 
@@ -96,6 +126,13 @@ mod tests {
                 .cloned()
                 .collect(),
             line_count: 3,
+            keys_types_count: [
+                ("$.key1::Number".to_string(), 2),
+                ("$.key2::Number".to_string(), 1),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
             ..Default::default()
         };
 
