@@ -55,35 +55,44 @@ impl fmt::Display for FileStats {
     }
 }
 
-pub fn parse_ndjson_file(file: File) -> FileStats {
+fn parse_json_iterable(json_iter: impl IntoIterator<Item = String>) -> FileStats {
     let mut fs = FileStats::new();
-    let reader = io::BufReader::new(file);
 
-    for (i, line) in reader.lines().enumerate() {
-        let line_number = i + 1;
-        fs.line_count = line_number;
-        let line = line.unwrap_or_else(|_| panic!("Failed to read line {}", line_number));
+    for (i, json_candidate) in json_iter.into_iter().enumerate() {
+        let iter_number = i + 1;
+        fs.line_count = iter_number;
 
-        let v: Value = match serde_json::from_str(&line) {
+        let json: Value = match serde_json::from_str(&json_candidate) {
             Ok(v) => v,
             Err(_) => {
-                fs.bad_lines.push(line_number);
+                fs.bad_lines.push(iter_number);
                 continue;
             }
         };
 
-        for key in v.paths().iter() {
+        for key in json.paths().iter() {
             let counter = fs.keys_count.entry(key.to_owned()).or_insert(0);
             *counter += 1;
         }
 
-        for (k, v) in v.paths_types().iter() {
+        for (k, v) in json.path_types().iter() {
             let path_type = format!("{}::{}", k, v);
             let counter = fs.keys_types_count.entry(path_type).or_insert(0);
             *counter += 1;
         }
     }
     fs
+}
+
+pub fn parse_ndjson_file(file: File) -> FileStats {
+    let reader = io::BufReader::new(file);
+    let lines = reader
+        .lines()
+        .enumerate()
+        // TODO: explore using itertools::process_results to replace panic
+        .map(|(i, line)| line.unwrap_or_else(|_| panic!("Failed to read line {}", i)));
+
+    parse_json_iterable(lines)
 }
 
 pub trait Paths {
@@ -96,12 +105,12 @@ impl Paths for Value {
     }
 }
 
-pub trait PathsTypes {
-    fn paths_types(&self) -> IndexMap<String, String>;
+pub trait PathTypes {
+    fn path_types(&self) -> IndexMap<String, String>;
 }
 
-impl PathsTypes for Value {
-    fn paths_types(&self) -> IndexMap<String, String> {
+impl PathTypes for Value {
+    fn path_types(&self) -> IndexMap<String, String> {
         super::paths::parse_json_paths_types(&self)
     }
 }
