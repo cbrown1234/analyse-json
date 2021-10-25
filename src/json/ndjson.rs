@@ -55,10 +55,13 @@ impl fmt::Display for FileStats {
     }
 }
 
-fn parse_json_iterable(json_iter: impl IntoIterator<Item = String>) -> FileStats {
+fn parse_json_iterable<E>(
+    json_iter: impl IntoIterator<Item = Result<String, E>>,
+) -> Result<FileStats, E> {
     let mut fs = FileStats::new();
 
     for (i, json_candidate) in json_iter.into_iter().enumerate() {
+        let json_candidate = json_candidate?;
         let iter_number = i + 1;
         fs.line_count = iter_number;
 
@@ -81,18 +84,13 @@ fn parse_json_iterable(json_iter: impl IntoIterator<Item = String>) -> FileStats
             *counter += 1;
         }
     }
-    fs
+    Ok(fs)
 }
 
-pub fn parse_ndjson_file(file: File) -> FileStats {
+pub fn parse_ndjson_file(file: File) -> Result<FileStats, std::io::Error> {
     let reader = io::BufReader::new(file);
-    let lines = reader
-        .lines()
-        .enumerate()
-        // TODO: explore using itertools::process_results to replace panic
-        .map(|(i, line)| line.unwrap_or_else(|_| panic!("Failed to read line {}", i)));
 
-    parse_json_iterable(lines)
+    Ok(parse_json_iterable(reader.lines())?)
 }
 
 pub trait Paths {
@@ -145,7 +143,7 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = parse_ndjson_file(tmpfile);
+        let file_stats = parse_ndjson_file(tmpfile).unwrap();
         assert_eq!(expected, file_stats);
     }
 
@@ -161,7 +159,7 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = parse_ndjson_file(tmpfile);
+        let file_stats = parse_ndjson_file(tmpfile).unwrap();
         assert_eq!(expected, file_stats);
     }
 }

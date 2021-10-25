@@ -17,7 +17,7 @@ pub struct Cli {
 pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
     if let Some(file_path) = args.file_path {
         let file = File::open(file_path)?;
-        let file_stats = json::ndjson::parse_ndjson_file(file);
+        let file_stats = json::ndjson::parse_ndjson_file(file)?;
         println!("{}", file_stats);
         return Ok(());
     }
@@ -27,7 +27,7 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
                 Ok(path) => {
                     println!("File '{}':", path.display());
                     let file = File::open(path)?;
-                    let file_stats = json::ndjson::parse_ndjson_file(file);
+                    let file_stats = json::ndjson::parse_ndjson_file(file)?;
                     println!("{}", file_stats);
                 }
                 Err(e) => eprintln!("Error reading glob entry: {:?}", e),
