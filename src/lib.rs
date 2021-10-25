@@ -23,16 +23,13 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
     }
     if let Some(pattern) = args.glob {
         for entry in glob(&pattern)? {
-            match entry {
-                Ok(path) => {
-                    println!("File '{}':", path.display());
-                    let file = File::open(path)?;
-                    let file_stats = json::ndjson::parse_ndjson_file(file)?;
-                    println!("{}", file_stats);
-                }
-                Err(e) => eprintln!("Error reading glob entry: {:?}", e),
-            }
+            let path = entry?;
+            println!("File '{}':", path.display());
+            let file = File::open(path)?;
+            let file_stats = json::ndjson::parse_ndjson_file(file)?;
+            println!("{}", file_stats);
         }
+        return Ok(());
     }
 
     Ok(())
