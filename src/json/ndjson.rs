@@ -1,10 +1,13 @@
 use super::IndexMap;
-pub use serde_json::Value;
+pub use serde_json::{Value, json};
 use std::fs::File;
 use std::{
     fmt,
     io::{self, prelude::*},
 };
+use jsonpath_rust::{JsonPathFinder, JsonPathQuery};
+use jsonpath_rust::parser::parser::parse_json_path;
+use std::error::Error;
 
 #[derive(Debug, PartialEq, Default)]
 pub struct FileStats {
@@ -112,6 +115,21 @@ impl PathTypes for Value {
         super::paths::parse_json_paths_types(&self)
     }
 }
+
+
+// fn filter(json_iter: impl IntoIterator<Item = Value>, path : &str) -> Result<impl Iterator<Item = Vec<&Value>>, String> {
+//     // let path = parse_json_path(path);
+//     let mut finder = JsonPathFinder::from_str("1", path)?;
+//     // for json in json_iter {
+//     //     let x = json.path(path)?;
+//     // }
+//     // json_iter.into_iter().map(move |json| {json.path(path)})
+//     // let path = parse_json_path(path).map_err(|e| e.to_string())?;
+//     Ok(json_iter.into_iter().map(|json| {
+//         finder.set_json(json);
+//         finder.find_slice()
+//     }))
+// }
 
 #[cfg(test)]
 mod tests {
