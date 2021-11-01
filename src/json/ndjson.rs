@@ -90,7 +90,7 @@ fn parse_json_iterable<E>(
 pub fn parse_ndjson_file(file: File) -> Result<FileStats, std::io::Error> {
     let reader = io::BufReader::new(file);
 
-    Ok(parse_json_iterable(reader.lines())?)
+    parse_json_iterable(reader.lines())
 }
 
 pub trait Paths {
@@ -99,7 +99,7 @@ pub trait Paths {
 
 impl Paths for Value {
     fn paths(&self) -> Vec<String> {
-        super::paths::parse_json_paths(&self)
+        super::paths::parse_json_paths(self)
     }
 }
 
@@ -109,7 +109,7 @@ pub trait PathTypes {
 
 impl PathTypes for Value {
     fn path_types(&self) -> IndexMap<String, String> {
-        super::paths::parse_json_paths_types(&self)
+        super::paths::parse_json_paths_types(self)
     }
 }
 
