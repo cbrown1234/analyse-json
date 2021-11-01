@@ -2,7 +2,7 @@
 name = "analyse-json"
 version = "0.1.0"
 authors = ["Chris Brown <cbrown1234@hotmail.co.uk>"]
-edition = "2018"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
