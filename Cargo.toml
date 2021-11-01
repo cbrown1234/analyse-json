@@ -12,6 +12,7 @@ itertools = "*"
 structopt = "0.3.13"
 glob = "0.3"
 indexmap = "1.7.0"
+jsonpath_lib = "*"
 
 [dev-dependencies]
 tempfile = "3"
