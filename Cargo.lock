@@ -8,6 +8,7 @@ version = "0.1.0"
 dependencies = [
  "dashmap",
  "glob",
+ "humantime",
  "indexmap",
  "itertools",
  "rayon",
@@ -169,6 +170,12 @@ checksum = "322f4de77956e22ed0e5032c359a0f1273f1f7f0d79bfa3b8ffbc730d7fbcc5c"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "humantime"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4"
 
 [[package]]
 name = "indexmap"
