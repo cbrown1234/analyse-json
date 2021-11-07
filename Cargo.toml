@@ -12,6 +12,8 @@ itertools = "*"
 structopt = "0.3.13"
 glob = "0.3"
 indexmap = "1.7.0"
+rayon = "1.5"
+dashmap = "4"
 
 [dev-dependencies]
 tempfile = "3"

@@ -1,6 +1,12 @@
 use super::IndexMap;
+use dashmap::DashMap;
+use rayon::iter::ParallelBridge;
+use rayon::prelude::ParallelIterator;
 pub use serde_json::Value;
+use std::error::Error;
 use std::fs::File;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Mutex;
 use std::{
     fmt,
     io::{self, prelude::*},
@@ -15,7 +21,7 @@ pub struct FileStats {
 }
 
 impl FileStats {
-    fn new() -> FileStats {
+    pub fn new() -> FileStats {
         FileStats {
             keys_count: IndexMap::new(),
             line_count: 0,
@@ -55,35 +61,75 @@ impl fmt::Display for FileStats {
     }
 }
 
-fn parse_json_iterable<E>(
-    json_iter: impl IntoIterator<Item = Result<String, E>>,
-) -> Result<FileStats, E> {
-    let mut fs = FileStats::new();
-
-    for (i, json_candidate) in json_iter.into_iter().enumerate() {
-        let json_candidate = json_candidate?;
-        let iter_number = i + 1;
-        fs.line_count = iter_number;
-
-        let json: Value = match serde_json::from_str(&json_candidate) {
-            Ok(v) => v,
-            Err(_) => {
-                fs.bad_lines.push(iter_number);
-                continue;
-            }
-        };
-
-        for key in json.paths().iter() {
-            let counter = fs.keys_count.entry(key.to_owned()).or_insert(0);
-            *counter += 1;
-        }
-
-        for (k, v) in json.path_types().iter() {
-            let path_type = format!("{}::{}", k, v);
-            let counter = fs.keys_types_count.entry(path_type).or_insert(0);
-            *counter += 1;
+// https://stackoverflow.com/questions/26368288/how-do-i-stop-iteration-and-return-an-error-when-iteratormap-returns-a-result
+fn until_err<T, E>(err: &mut &mut Result<(), E>, item: Result<T, E>) -> Option<T> {
+    match item {
+        Ok(item) => Some(item),
+        Err(e) => {
+            **err = Err(e);
+            None
         }
     }
+}
+
+fn parse_json_iterable<E>(
+    json_iter: impl Iterator<Item = Result<String, E>> + Send,
+) -> Result<FileStats, E>
+where
+    E: Error + Send,
+{
+    let keys_count: DashMap<String, usize> = DashMap::new();
+    let keys_types_count: DashMap<String, usize> = DashMap::new();
+    let mut bad_lines: Vec<usize> = Vec::new();
+    let bad_lines_mutex = Mutex::new(&mut bad_lines);
+    let line_count = AtomicUsize::new(0);
+
+    // Bubble up upstream errors
+    let mut err = Ok(());
+    let json_iter = json_iter.scan(&mut err, until_err);
+
+    json_iter
+        .enumerate()
+        .par_bridge()
+        .map(|(i, json_candidate)| (i, serde_json::from_str(&json_candidate)))
+        .inspect(|(i, j): &(usize, Result<Value, serde_json::Error>)| {
+            let line_num = i + 1;
+            if j.is_err() {
+                let mut bad_lines = bad_lines_mutex.lock().unwrap();
+                bad_lines.push(line_num);
+            }
+            line_count.fetch_max(line_num, Ordering::AcqRel);
+        })
+        .filter_map(|(_i, j)| j.ok())
+        .for_each(|json| {
+            for key in json.paths().iter() {
+                let mut counter = keys_count.entry(key.to_owned()).or_insert(0);
+                *counter.value_mut() += 1;
+            }
+
+            for (k, v) in json.path_types().iter() {
+                let path_type = format!("{}::{}", k, v);
+                let mut counter = keys_types_count.entry(path_type).or_insert(0);
+                *counter.value_mut() += 1;
+            }
+        });
+
+    err?;
+
+    let fs = FileStats {
+        keys_count: keys_count
+            .into_read_only()
+            .iter()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect(),
+        line_count: line_count.load(Ordering::SeqCst),
+        keys_types_count: keys_types_count
+            .into_read_only()
+            .iter()
+            .map(|(k, v)| (k.to_owned(), v.to_owned()))
+            .collect(),
+        bad_lines: bad_lines,
+    };
     Ok(fs)
 }
 
