@@ -1,6 +1,11 @@
+use flate2::read::GzDecoder;
 use glob::glob;
+use json::ndjson::{parse_ndjson_bufreader, FileStats};
 use std::error::Error;
+use std::ffi::OsStr;
 use std::fs::File;
+use std::io::{self, BufRead};
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 pub mod json;
@@ -14,19 +19,35 @@ pub struct Cli {
     glob: Option<String>,
 }
 
+fn get_bufreader(file_path: std::path::PathBuf) -> Result<Box<dyn BufRead + Send>, Box<dyn Error>> {
+    let path = file_path.clone();
+    let extension = path.extension().and_then(OsStr::to_str);
+    let file = File::open(file_path)?;
+    if extension == Some("gz") {
+        let file = GzDecoder::new(file);
+        Ok(Box::new(io::BufReader::new(file)))
+    } else {
+        Ok(Box::new(io::BufReader::new(file)))
+    }
+}
+
+fn parse_ndjson_file_path(file_path: PathBuf) -> Result<FileStats, Box<dyn Error>> {
+    let buf_reader = get_bufreader(file_path)?;
+    Ok(parse_ndjson_bufreader(buf_reader)?)
+}
+
 pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
     if let Some(file_path) = args.file_path {
-        let file = File::open(file_path)?;
-        let file_stats = json::ndjson::parse_ndjson_file(file)?;
+        let file_stats = parse_ndjson_file_path(file_path)?;
         println!("{}", file_stats);
         return Ok(());
     }
     if let Some(pattern) = args.glob {
+        println!("Glob '{}':", pattern);
         for entry in glob(&pattern)? {
             let path = entry?;
             println!("File '{}':", path.display());
-            let file = File::open(path)?;
-            let file_stats = json::ndjson::parse_ndjson_file(file)?;
+            let file_stats = parse_ndjson_file_path(path)?;
             println!("{}", file_stats);
         }
         return Ok(());

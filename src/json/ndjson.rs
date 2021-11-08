@@ -128,15 +128,18 @@ where
             .iter()
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect(),
-        bad_lines: bad_lines,
+        bad_lines,
     };
     Ok(fs)
 }
 
-pub fn parse_ndjson_file(file: File) -> Result<FileStats, std::io::Error> {
-    let reader = io::BufReader::new(file);
+pub fn parse_ndjson_bufreader(bufreader: impl BufRead + Send) -> Result<FileStats, std::io::Error> {
+    parse_json_iterable(bufreader.lines())
+}
 
-    parse_json_iterable(reader.lines())
+pub fn parse_ndjson_file(file: File) -> Result<FileStats, std::io::Error> {
+    // if file.metadata().
+    parse_ndjson_bufreader(io::BufReader::new(file))
 }
 
 pub trait Paths {
