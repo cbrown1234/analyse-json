@@ -1,6 +1,6 @@
 use flate2::read::GzDecoder;
 use glob::glob;
-use json::ndjson::{parse_ndjson_bufreader, FileStats};
+use json::ndjson::{parse_json_iterable, parse_ndjson_bufreader, FileStats};
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -37,6 +37,13 @@ fn parse_ndjson_file_path(file_path: PathBuf) -> Result<FileStats, Box<dyn Error
 }
 
 pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
+    let stdin = io::stdin();
+    let stdin_file_stats = parse_json_iterable(stdin.lock().lines())?;
+    if stdin_file_stats != FileStats::default() {
+        println!("{}", stdin_file_stats);
+        return Ok(());
+    }
+
     if let Some(file_path) = args.file_path {
         let file_stats = parse_ndjson_file_path(file_path)?;
         println!("{}", file_stats);

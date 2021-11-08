@@ -72,7 +72,39 @@ fn until_err<T, E>(err: &mut &mut Result<(), E>, item: Result<T, E>) -> Option<T
     }
 }
 
-fn parse_json_iterable<E>(
+pub fn parse_json_iterable<E>(
+    json_iter: impl IntoIterator<Item = Result<String, E>>,
+) -> Result<FileStats, E> {
+    let mut fs = FileStats::new();
+
+    for (i, json_candidate) in json_iter.into_iter().enumerate() {
+        let json_candidate = json_candidate?;
+        let iter_number = i + 1;
+        fs.line_count = iter_number;
+
+        let json: Value = match serde_json::from_str(&json_candidate) {
+            Ok(v) => v,
+            Err(_) => {
+                fs.bad_lines.push(iter_number);
+                continue;
+            }
+        };
+
+        for key in json.paths().iter() {
+            let counter = fs.keys_count.entry(key.to_owned()).or_insert(0);
+            *counter += 1;
+        }
+
+        for (k, v) in json.path_types().iter() {
+            let path_type = format!("{}::{}", k, v);
+            let counter = fs.keys_types_count.entry(path_type).or_insert(0);
+            *counter += 1;
+        }
+    }
+    Ok(fs)
+}
+
+pub fn parse_json_iterable_par<E>(
     json_iter: impl Iterator<Item = Result<String, E>> + Send,
 ) -> Result<FileStats, E>
 where
@@ -134,7 +166,7 @@ where
 }
 
 pub fn parse_ndjson_bufreader(bufreader: impl BufRead + Send) -> Result<FileStats, std::io::Error> {
-    parse_json_iterable(bufreader.lines())
+    parse_json_iterable_par(bufreader.lines())
 }
 
 pub fn parse_ndjson_file(file: File) -> Result<FileStats, std::io::Error> {
@@ -193,6 +225,64 @@ mod tests {
         };
 
         let file_stats = parse_ndjson_file(tmpfile).unwrap();
+        assert_eq!(expected, file_stats);
+    }
+
+    #[test]
+    fn simple_ndjson_iterable() {
+        let iter: Vec<Result<String, std::io::Error>> = vec![
+            Ok(r#"{"key1": 123}"#.to_string()),
+            Ok(r#"{"key2": 123}"#.to_string()),
+            Ok(r#"{"key1": 123}"#.to_string()),
+        ];
+        let iter = iter.into_iter();
+
+        let expected = FileStats {
+            keys_count: [("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]
+                .iter()
+                .cloned()
+                .collect(),
+            line_count: 3,
+            keys_types_count: [
+                ("$.key1::Number".to_string(), 2),
+                ("$.key2::Number".to_string(), 1),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            ..Default::default()
+        };
+
+        let file_stats = parse_json_iterable(iter).unwrap();
+        assert_eq!(expected, file_stats);
+    }
+
+    #[test]
+    fn simple_ndjson_iterable_par() {
+        let iter: Vec<Result<String, std::io::Error>> = vec![
+            Ok(r#"{"key1": 123}"#.to_string()),
+            Ok(r#"{"key2": 123}"#.to_string()),
+            Ok(r#"{"key1": 123}"#.to_string()),
+        ];
+        let iter = iter.into_iter();
+
+        let expected = FileStats {
+            keys_count: [("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]
+                .iter()
+                .cloned()
+                .collect(),
+            line_count: 3,
+            keys_types_count: [
+                ("$.key1::Number".to_string(), 2),
+                ("$.key2::Number".to_string(), 1),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            ..Default::default()
+        };
+
+        let file_stats = parse_json_iterable_par(iter).unwrap();
         assert_eq!(expected, file_stats);
     }
 
