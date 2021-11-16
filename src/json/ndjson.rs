@@ -130,7 +130,7 @@ where
                 let mut bad_lines = bad_lines_mutex.lock().unwrap();
                 bad_lines.push(line_num);
             }
-            line_count.fetch_max(line_num, Ordering::AcqRel);
+            line_count.fetch_max(line_num, Ordering::Release);
         })
         .filter_map(|(_i, j)| j.ok())
         .for_each(|json| {
@@ -154,7 +154,7 @@ where
             .iter()
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect(),
-        line_count: line_count.load(Ordering::SeqCst),
+        line_count: line_count.load(Ordering::Acquire),
         keys_types_count: keys_types_count
             .into_read_only()
             .iter()
