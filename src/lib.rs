@@ -17,6 +17,9 @@ pub struct Cli {
 
     #[structopt(short, long)]
     glob: Option<String>,
+
+    #[structopt(short = "n", long)]
+    lines: Option<usize>,
 }
 
 fn get_bufreader(file_path: std::path::PathBuf) -> Result<Box<dyn BufRead + Send>, Box<dyn Error>> {
@@ -37,9 +40,17 @@ fn parse_ndjson_file_path(file_path: PathBuf) -> Result<FileStats, Box<dyn Error
 }
 
 pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
-    let stdin = io::stdin();
-    let stdin_file_stats = parse_json_iterable(stdin.lock().lines())?;
+    let stdin = io::stdin();    
+    let stdin_iter = stdin.lock().lines();
+    let stdin_iter = if let Some(n) = args.lines {
+        stdin_iter.take(n)
+    } else {
+        stdin_iter.take(usize::MAX)
+    }
+    ;
+    let stdin_file_stats = parse_json_iterable(stdin_iter)?;
     if stdin_file_stats != FileStats::default() {
+        // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
         println!("{}", stdin_file_stats);
         return Ok(());
     }
