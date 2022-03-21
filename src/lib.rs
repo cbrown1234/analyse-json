@@ -1,6 +1,7 @@
 use flate2::read::GzDecoder;
 use glob::glob;
 use json::ndjson::{parse_json_iterable, parse_ndjson_bufreader, FileStats};
+use jsonpath::Selector;
 use std::error::Error;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -20,6 +21,9 @@ pub struct Cli {
 
     #[structopt(short = "n", long)]
     lines: Option<usize>,
+
+    #[structopt(long)]
+    jsonpath: Option<String>,
 }
 
 fn get_bufreader(file_path: std::path::PathBuf) -> Result<Box<dyn BufRead + Send>, Box<dyn Error>> {
@@ -48,13 +52,22 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
         stdin_iter.take(usize::MAX)
     }
     ;
-    let stdin_file_stats = parse_json_iterable(stdin_iter)?;
+    let selector;
+    let jsonpath= if let Some(jsonpath) = args.jsonpath {
+        selector = Selector::new(&jsonpath)?;
+        Some(&selector)
+    } else {
+        None
+    }
+    ;
+    let stdin_file_stats = parse_json_iterable(stdin_iter, jsonpath)?;
     if stdin_file_stats != FileStats::default() {
         // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
         println!("{}", stdin_file_stats);
         return Ok(());
     }
 
+    // TODO: Impl line limit option
     if let Some(file_path) = args.file_path {
         let file_stats = parse_ndjson_file_path(file_path)?;
         println!("{}", file_stats);

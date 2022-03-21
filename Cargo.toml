@@ -16,6 +16,7 @@ rayon = "1.5"
 dashmap = "4"
 humantime = "2.1"
 flate2 = "1"
+jsonpath = "0.1"
 
 [dev-dependencies]
 tempfile = "3"

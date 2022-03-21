@@ -11,6 +11,7 @@ use std::{
     fmt,
     io::{self, prelude::*},
 };
+use jsonpath::Selector;
 
 #[derive(Debug, PartialEq, Default)]
 pub struct FileStats {
@@ -18,6 +19,7 @@ pub struct FileStats {
     pub line_count: usize,
     pub bad_lines: Vec<usize>,
     pub keys_types_count: IndexMap<String, usize>,
+    pub empty_lines: Vec<usize>,
 }
 
 impl FileStats {
@@ -27,6 +29,7 @@ impl FileStats {
             line_count: 0,
             bad_lines: Vec::new(),
             keys_types_count: IndexMap::new(),
+            empty_lines: Vec::new(),
         }
     }
 
@@ -57,7 +60,8 @@ impl fmt::Display for FileStats {
         for (k, v) in self.key_type_occurance() {
             writeln!(f, "{}: {}%", k, v)?;
         }
-        writeln!(f, "Corrupted lines:\n{:?}", self.bad_lines)
+        writeln!(f, "Corrupted lines:\n{:?}", self.bad_lines)?;
+        writeln!(f, "Empty lines:\n{:?}", self.empty_lines)
     }
 }
 
@@ -74,6 +78,7 @@ fn until_err<T, E>(err: &mut &mut Result<(), E>, item: Result<T, E>) -> Option<T
 
 pub fn parse_json_iterable<E>(
     json_iter: impl IntoIterator<Item = Result<String, E>>,
+    jsonpath: Option<&Selector>,
 ) -> Result<FileStats, E> {
     let mut fs = FileStats::new();
 
@@ -82,13 +87,25 @@ pub fn parse_json_iterable<E>(
         let iter_number = i + 1;
         fs.line_count = iter_number;
 
-        let json: Value = match serde_json::from_str(&json_candidate) {
+        let mut json: Value = match serde_json::from_str(&json_candidate) {
             Ok(v) => v,
             Err(_) => {
                 fs.bad_lines.push(iter_number);
                 continue;
             }
         };
+
+        if let Some(selector) = jsonpath {
+            let mut json_list = selector.find(&json);
+            if let Some(json_1) = json_list.next() {
+                // TODO: handle multiple search results
+                assert_eq!(None, json_list.next());
+                json=json_1.to_owned()
+            } else {
+                fs.empty_lines.push(iter_number);
+                continue;
+            }
+        }
 
         for key in json.paths().iter() {
             let counter = fs.keys_count.entry(key.to_owned()).or_insert(0);
@@ -104,6 +121,7 @@ pub fn parse_json_iterable<E>(
     Ok(fs)
 }
 
+// TODO: implement jsonpath, empty lines 
 pub fn parse_json_iterable_par<E>(
     json_iter: impl Iterator<Item = Result<String, E>> + Send,
 ) -> Result<FileStats, E>
@@ -161,9 +179,21 @@ where
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect(),
         bad_lines,
+        ..Default::default()
     };
     Ok(fs)
 }
+
+// // TODO: impliment method to handle
+// trait Stats {
+//     fn stats(&self) -> FileStats;
+// }
+
+// impl<T: impl Iterator<Item = Result<String, E>> + Send> Stats for T {
+//     fn stats(&self) {
+//         parse_json_iterable_par(&self)
+//     }
+// }
 
 pub fn parse_ndjson_bufreader(bufreader: impl BufRead + Send) -> Result<FileStats, std::io::Error> {
     parse_json_iterable_par(bufreader.lines())
@@ -253,7 +283,7 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = parse_json_iterable(iter).unwrap();
+        let file_stats = parse_json_iterable(iter, None).unwrap();
         assert_eq!(expected, file_stats);
     }
 
@@ -299,6 +329,37 @@ mod tests {
         };
 
         let file_stats = parse_ndjson_file(tmpfile).unwrap();
+        assert_eq!(expected, file_stats);
+    }
+
+    #[test]
+    fn simple_ndjson_iterable_jsonpath() {
+        let iter: Vec<Result<String, std::io::Error>> = vec![
+            Ok(r#"{"key1": 123}"#.to_string()),
+            Ok(r#"{"a": {"key2": 123}}"#.to_string()),
+            Ok(r#"{"key1": 123}"#.to_string()),
+        ];
+        let iter = iter.into_iter();
+
+        let jsonpath = Selector::new("$.a").unwrap();
+
+        let expected = FileStats {
+            keys_count: [("$.key2".to_string(), 1)]
+                .iter()
+                .cloned()
+                .collect(),
+            line_count: 3,
+            keys_types_count: [
+                ("$.key2::Number".to_string(), 1),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            empty_lines: vec![1, 3],
+            ..Default::default()
+        };
+
+        let file_stats = parse_json_iterable(iter, Some(&jsonpath)).unwrap();
         assert_eq!(expected, file_stats);
     }
 }
