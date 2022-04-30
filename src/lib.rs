@@ -7,22 +7,24 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-use structopt::StructOpt;
+use clap::Parser;
+
 
 pub mod json;
 
-#[derive(StructOpt)]
+#[derive(Parser)]
+#[clap(author, version, about, long_about = None)]
 pub struct Cli {
-    #[structopt(parse(from_os_str))]
+    #[clap(parse(from_os_str))]
     file_path: Option<std::path::PathBuf>,
 
-    #[structopt(short, long)]
+    #[clap(short, long)]
     glob: Option<String>,
 
-    #[structopt(short = "n", long)]
+    #[clap(short = 'n', long)]
     lines: Option<usize>,
 
-    #[structopt(long)]
+    #[clap(long)]
     jsonpath: Option<String>,
 }
 

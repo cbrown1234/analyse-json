@@ -9,7 +9,7 @@ edition = "2021"
 [dependencies]
 serde_json = "1.0"
 itertools = "*"
-structopt = "0.3.13"
+clap = { version = "3.1.13", features = ["derive"] }
 glob = "0.3"
 indexmap = "1.7.0"
 rayon = "1.5"
