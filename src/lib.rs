@@ -28,7 +28,7 @@ pub struct Cli {
     jsonpath: Option<String>,
 }
 
-fn get_bufreader(file_path: std::path::PathBuf) -> Result<Box<dyn BufRead + Send>, Box<dyn Error>> {
+fn get_bufreader(file_path: &std::path::PathBuf) -> Result<Box<dyn BufRead + Send>, Box<dyn Error>> {
     let path = file_path.clone();
     let extension = path.extension().and_then(OsStr::to_str);
     let file = File::open(file_path)?;
@@ -40,12 +40,12 @@ fn get_bufreader(file_path: std::path::PathBuf) -> Result<Box<dyn BufRead + Send
     }
 }
 
-fn parse_ndjson_file_path(file_path: PathBuf) -> Result<FileStats, Box<dyn Error>> {
+fn parse_ndjson_file_path(file_path: &PathBuf) -> Result<FileStats, Box<dyn Error>> {
     let buf_reader = get_bufreader(file_path)?;
     Ok(parse_ndjson_bufreader(buf_reader)?)
 }
 
-pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
+pub fn run(args: &Cli) -> Result<(), Box<dyn Error>> {
     let stdin = io::stdin();    
     let stdin_iter = stdin.lock().lines();
     let stdin_iter = if let Some(n) = args.lines {
@@ -54,35 +54,39 @@ pub fn run(args: Cli) -> Result<(), Box<dyn Error>> {
         stdin_iter.take(usize::MAX)
     }
     ;
+    // TODO: Refactor to CLI method?
     let selector;
-    let jsonpath= if let Some(jsonpath) = args.jsonpath {
+    let jsonpath= if let Some(jsonpath) = &args.jsonpath {
         selector = Selector::new(&jsonpath)?;
         Some(&selector)
     } else {
         None
     }
     ;
-    let stdin_file_stats = parse_json_iterable(stdin_iter, jsonpath)?;
-    if stdin_file_stats != FileStats::default() {
-        // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
-        println!("{}", stdin_file_stats);
-        return Ok(());
-    }
 
     // TODO: Impl line limit option
-    if let Some(file_path) = args.file_path {
+    if let Some(file_path) = &args.file_path {
         let file_stats = parse_ndjson_file_path(file_path)?;
         println!("{}", file_stats);
         return Ok(());
     }
-    if let Some(pattern) = args.glob {
+    if let Some(pattern) = &args.glob {
         println!("Glob '{}':", pattern);
         for entry in glob(&pattern)? {
             let path = entry?;
             println!("File '{}':", path.display());
-            let file_stats = parse_ndjson_file_path(path)?;
+            let file_stats = parse_ndjson_file_path(&path)?;
             println!("{}", file_stats);
         }
+        return Ok(());
+    }
+
+    // TODO: Refactor: parse borrow of args around to functions
+    // TODO: Fix hang on empty stdin
+    let stdin_file_stats = parse_json_iterable(stdin_iter, jsonpath)?;
+    if stdin_file_stats != FileStats::default() {
+        // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
+        println!("{}", stdin_file_stats);
         return Ok(());
     }
 
