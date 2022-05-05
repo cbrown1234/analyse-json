@@ -7,7 +7,7 @@ fn main() {
     let args = Cli::parse();
 
     let now = Instant::now();
-    if let Err(e) = analyse_json::run(&args) {
+    if let Err(e) = analyse_json::run(args) {
         eprintln!("Application error: {}", e);
 
         process::exit(1);

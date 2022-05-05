@@ -2,15 +2,17 @@ use flate2::read::GzDecoder;
 use glob::glob;
 use json::ndjson::{parse_json_iterable, parse_ndjson_bufreader, FileStats};
 use jsonpath::Selector;
-use std::error::Error;
+use std::error;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{self, BufRead};
+use std::io::{self, BufRead, Stdin, StdinLock};
 use std::path::PathBuf;
 use clap::Parser;
 
 
 pub mod json;
+
+type Result<T> = ::std::result::Result<T, Box<dyn error::Error>>;
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -28,9 +30,9 @@ pub struct Cli {
     jsonpath: Option<String>,
 }
 
-fn get_bufreader(file_path: &std::path::PathBuf) -> Result<Box<dyn BufRead + Send>, Box<dyn Error>> {
-    let path = file_path.clone();
-    let extension = path.extension().and_then(OsStr::to_str);
+// TODO: Does this need to be Box<dyn BufRead>? Could it be impl BufRead?
+fn get_bufreader(_args: &Cli, file_path: &std::path::PathBuf) -> Result<Box<dyn BufRead + Send>> {
+    let extension = file_path.extension().and_then(OsStr::to_str);
     let file = File::open(file_path)?;
     if extension == Some("gz") {
         let file = GzDecoder::new(file);
@@ -40,20 +42,26 @@ fn get_bufreader(file_path: &std::path::PathBuf) -> Result<Box<dyn BufRead + Sen
     }
 }
 
-fn parse_ndjson_file_path(file_path: &PathBuf) -> Result<FileStats, Box<dyn Error>> {
-    let buf_reader = get_bufreader(file_path)?;
-    Ok(parse_ndjson_bufreader(buf_reader)?)
+fn parse_ndjson_file_path(args: &Cli, file_path: &PathBuf) -> Result<FileStats> {
+    let buf_reader = get_bufreader(args, file_path)?;
+    Ok(parse_ndjson_bufreader(args, buf_reader)?)
 }
 
-pub fn run(args: &Cli) -> Result<(), Box<dyn Error>> {
-    let stdin = io::stdin();    
+// fn parse_stdin<'a>(args: &Cli, stdin: &'a mut StdinLock<'a>) -> impl Iterator<Item = io::Result<String>> + 'a {
+//     let stdin_iter = stdin.lines();
+//     let stdin_iter = if let Some(n) = args.lines {
+//         stdin_iter.take(n)
+//     } else {
+//         stdin_iter.take(usize::MAX)
+//     };
+//     stdin_iter
+// }
+
+pub fn run(args: Cli) -> Result<()> {
+    let stdin = io::stdin();
+    // let stdin = stdin.lock().lines();
+    // let stdin_iter = parse_iter(&args, stdin);
     let stdin_iter = stdin.lock().lines();
-    let stdin_iter = if let Some(n) = args.lines {
-        stdin_iter.take(n)
-    } else {
-        stdin_iter.take(usize::MAX)
-    }
-    ;
     // TODO: Refactor to CLI method?
     let selector;
     let jsonpath= if let Some(jsonpath) = &args.jsonpath {
@@ -66,7 +74,7 @@ pub fn run(args: &Cli) -> Result<(), Box<dyn Error>> {
 
     // TODO: Impl line limit option
     if let Some(file_path) = &args.file_path {
-        let file_stats = parse_ndjson_file_path(file_path)?;
+        let file_stats = parse_ndjson_file_path(&args, file_path)?;
         println!("{}", file_stats);
         return Ok(());
     }
@@ -75,7 +83,7 @@ pub fn run(args: &Cli) -> Result<(), Box<dyn Error>> {
         for entry in glob(&pattern)? {
             let path = entry?;
             println!("File '{}':", path.display());
-            let file_stats = parse_ndjson_file_path(&path)?;
+            let file_stats = parse_ndjson_file_path(&args, &path)?;
             println!("{}", file_stats);
         }
         return Ok(());
@@ -83,7 +91,7 @@ pub fn run(args: &Cli) -> Result<(), Box<dyn Error>> {
 
     // TODO: Refactor: parse borrow of args around to functions
     // TODO: Fix hang on empty stdin
-    let stdin_file_stats = parse_json_iterable(stdin_iter, jsonpath)?;
+    let stdin_file_stats = parse_json_iterable(&args, stdin_iter, jsonpath)?;
     if stdin_file_stats != FileStats::default() {
         // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
         println!("{}", stdin_file_stats);

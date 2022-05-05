@@ -1,3 +1,5 @@
+use crate::Cli;
+
 use super::IndexMap;
 use dashmap::DashMap;
 use rayon::iter::ParallelBridge;
@@ -77,12 +79,16 @@ fn until_err<T, E>(err: &mut &mut Result<(), E>, item: Result<T, E>) -> Option<T
 }
 
 pub fn parse_json_iterable<E>(
+    args: &Cli,
     json_iter: impl IntoIterator<Item = Result<String, E>>,
     jsonpath: Option<&Selector>,
 ) -> Result<FileStats, E> {
     let mut fs = FileStats::new();
 
-    for (i, json_candidate) in json_iter.into_iter().enumerate() {
+    let json_iter = json_iter.into_iter();
+    let json_iter = parse_iter(args, json_iter);
+
+    for (i, json_candidate) in json_iter.enumerate() {
         let json_candidate = json_candidate?;
         let iter_number = i + 1;
         fs.line_count = iter_number;
@@ -195,13 +201,26 @@ where
 //     }
 // }
 
-pub fn parse_ndjson_bufreader(bufreader: impl BufRead + Send) -> Result<FileStats, std::io::Error> {
-    parse_json_iterable_par(bufreader.lines())
+pub fn parse_iter<E, I: IntoIterator<Item = Result<String, E>>>(args: &Cli, stdin_iter: I) -> impl Iterator<Item = Result<String, E>> {
+    let stdin_iter = stdin_iter.into_iter();
+    let stdin_iter = if let Some(n) = args.lines {
+        stdin_iter.take(n)
+    } else {
+        stdin_iter.take(usize::MAX)
+    };
+    stdin_iter
 }
 
-pub fn parse_ndjson_file(file: File) -> Result<FileStats, std::io::Error> {
+pub fn parse_ndjson_bufreader(args: &Cli, bufreader: impl BufRead + Send) -> Result<FileStats, std::io::Error> {
+    let json_iter = bufreader.lines();
+    // TODO: can 
+    let json_iter = parse_iter(args, json_iter);
+    parse_json_iterable_par(json_iter)
+}
+
+pub fn parse_ndjson_file(args: &Cli, file: File) -> Result<FileStats, std::io::Error> {
     // if file.metadata().
-    parse_ndjson_bufreader(io::BufReader::new(file))
+    parse_ndjson_bufreader(args, io::BufReader::new(file))
 }
 
 pub trait Paths {
