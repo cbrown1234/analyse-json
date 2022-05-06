@@ -129,6 +129,7 @@ pub fn parse_json_iterable<E>(
 
 // TODO: implement jsonpath, empty lines
 pub fn parse_json_iterable_par<E>(
+    args: &Cli,
     json_iter: impl Iterator<Item = Result<String, E>> + Send,
 ) -> Result<FileStats, E>
 where
@@ -139,6 +140,8 @@ where
     let mut bad_lines: Vec<usize> = Vec::new();
     let bad_lines_mutex = Mutex::new(&mut bad_lines);
     let line_count = AtomicUsize::new(0);
+
+    let json_iter = parse_iter(args, json_iter);
 
     // Bubble up upstream errors
     let mut err = Ok(());
@@ -201,27 +204,25 @@ where
 //     }
 // }
 
-pub fn parse_iter<E, I: IntoIterator<Item = Result<String, E>>>(
-    args: &Cli,
-    stdin_iter: I,
-) -> impl Iterator<Item = Result<String, E>> {
-    let stdin_iter = stdin_iter.into_iter();
-    let stdin_iter = if let Some(n) = args.lines {
-        stdin_iter.take(n)
+pub fn parse_iter<E, I>(args: &Cli, iter: I) -> impl Iterator<Item = Result<String, E>>
+where
+    I: IntoIterator<Item = Result<String, E>>,
+{
+    let iter = iter.into_iter();
+    let iter = if let Some(n) = args.lines {
+        iter.take(n)
     } else {
-        stdin_iter.take(usize::MAX)
+        iter.take(usize::MAX)
     };
-    stdin_iter
+    iter
 }
 
 pub fn parse_ndjson_bufreader(
     args: &Cli,
     bufreader: impl BufRead + Send,
-) -> Result<FileStats, std::io::Error> {
+) -> Result<FileStats, io::Error> {
     let json_iter = bufreader.lines();
-    // TODO: can
-    let json_iter = parse_iter(args, json_iter);
-    parse_json_iterable_par(json_iter)
+    parse_json_iterable_par(args, json_iter)
 }
 
 pub fn parse_ndjson_file(args: &Cli, file: File) -> Result<FileStats, std::io::Error> {
@@ -339,7 +340,8 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = parse_json_iterable_par(iter).unwrap();
+        let args = Cli::default();
+        let file_stats = parse_json_iterable_par(&args, iter).unwrap();
         assert_eq!(expected, file_stats);
     }
 
