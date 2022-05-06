@@ -2,11 +2,10 @@ use crate::Cli;
 
 use super::IndexMap;
 use dashmap::DashMap;
-use jsonpath::Selector;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
 pub use serde_json::Value;
-use std::error::Error;
+use std::error::{Error, self};
 use std::fs::File;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -78,15 +77,14 @@ fn until_err<T, E>(err: &mut &mut Result<(), E>, item: Result<T, E>) -> Option<T
     }
 }
 
-pub fn parse_json_iterable<E>(
+pub fn parse_json_iterable<E: 'static + Error>(
     args: &Cli,
     json_iter: impl IntoIterator<Item = Result<String, E>>,
-    jsonpath: Option<&Selector>,
-) -> Result<FileStats, E> {
+) -> Result<FileStats, Box<dyn error::Error>> {
     let mut fs = FileStats::new();
 
-    let json_iter = json_iter.into_iter();
     let json_iter = parse_iter(args, json_iter);
+    let jsonpath = args.jsonpath_selector()?;
 
     for (i, json_candidate) in json_iter.enumerate() {
         let json_candidate = json_candidate?;
@@ -101,7 +99,7 @@ pub fn parse_json_iterable<E>(
             }
         };
 
-        if let Some(selector) = jsonpath {
+        if let Some(ref selector) = jsonpath {
             let mut json_list = selector.find(&json);
             if let Some(json_1) = json_list.next() {
                 // TODO: handle multiple search results
@@ -311,7 +309,7 @@ mod tests {
         };
 
         let args = Cli::default();
-        let file_stats = parse_json_iterable(&args, iter, None).unwrap();
+        let file_stats = parse_json_iterable(&args, iter).unwrap();
         assert_eq!(expected, file_stats);
     }
 
@@ -371,8 +369,6 @@ mod tests {
         ];
         let iter = iter.into_iter();
 
-        let jsonpath = Selector::new("$.a").unwrap();
-
         let expected = FileStats {
             keys_count: [("$.key2".to_string(), 1)].iter().cloned().collect(),
             line_count: 3,
@@ -384,8 +380,9 @@ mod tests {
             ..Default::default()
         };
 
-        let args = Cli::default();
-        let file_stats = parse_json_iterable(&args, iter, Some(&jsonpath)).unwrap();
+        let mut args = Cli::default();
+        args.jsonpath = Some("$.a".to_string());
+        let file_stats = parse_json_iterable(&args, iter).unwrap();
         assert_eq!(expected, file_stats);
     }
 }

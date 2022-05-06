@@ -29,6 +29,18 @@ pub struct Cli {
     jsonpath: Option<String>,
 }
 
+impl Cli {
+    fn jsonpath_selector(&self) -> Result<Option<Selector>> {
+        let jsonpath_selector = if let Some(jsonpath) = &self.jsonpath {
+            let selector = Selector::new(&jsonpath)?;
+            Some(selector)
+        } else {
+            None
+        };
+        Ok(jsonpath_selector)
+    }
+}
+
 // TODO: Does this need to be Box<dyn BufRead>? Could it be impl BufRead?
 fn get_bufreader(_args: &Cli, file_path: &std::path::PathBuf) -> Result<Box<dyn BufRead + Send>> {
     let extension = file_path.extension().and_then(OsStr::to_str);
@@ -58,17 +70,7 @@ fn parse_ndjson_file_path(args: &Cli, file_path: &PathBuf) -> Result<FileStats> 
 
 pub fn run(args: Cli) -> Result<()> {
     let stdin = io::stdin();
-    // let stdin = stdin.lock().lines();
-    // let stdin_iter = parse_iter(&args, stdin);
     let stdin_iter = stdin.lock().lines();
-    // TODO: Refactor to CLI method?
-    let selector;
-    let jsonpath = if let Some(jsonpath) = &args.jsonpath {
-        selector = Selector::new(&jsonpath)?;
-        Some(&selector)
-    } else {
-        None
-    };
 
     // TODO: Impl line limit option
     if let Some(file_path) = &args.file_path {
@@ -89,7 +91,7 @@ pub fn run(args: Cli) -> Result<()> {
 
     // TODO: Refactor: parse borrow of args around to functions
     // TODO: Fix hang on empty stdin
-    let stdin_file_stats = parse_json_iterable(&args, stdin_iter, jsonpath)?;
+    let stdin_file_stats = parse_json_iterable(&args, stdin_iter)?;
     if stdin_file_stats != FileStats::default() {
         // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
         println!("{}", stdin_file_stats);
