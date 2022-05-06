@@ -251,6 +251,7 @@ mod tests {
 
     #[test]
     fn simple_ndjson_file() {
+        
         let mut tmpfile: File = tempfile::tempfile().unwrap();
         writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
         writeln!(tmpfile, r#"{{"key2": 123}}"#).unwrap();
@@ -273,7 +274,8 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = parse_ndjson_file(tmpfile).unwrap();
+        let args = Cli::default();
+        let file_stats = parse_ndjson_file(&args, tmpfile).unwrap();
         assert_eq!(expected, file_stats);
     }
 
@@ -302,7 +304,8 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = parse_json_iterable(iter, None).unwrap();
+        let args = Cli::default();
+        let file_stats = parse_json_iterable(&args, iter, None).unwrap();
         assert_eq!(expected, file_stats);
     }
 
@@ -347,7 +350,8 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = parse_ndjson_file(tmpfile).unwrap();
+        let args = Cli::default();
+        let file_stats = parse_ndjson_file(&args, tmpfile).unwrap();
         assert_eq!(expected, file_stats);
     }
 
@@ -378,7 +382,8 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = parse_json_iterable(iter, Some(&jsonpath)).unwrap();
+        let args = Cli::default();
+        let file_stats = parse_json_iterable(&args, iter, Some(&jsonpath)).unwrap();
         assert_eq!(expected, file_stats);
     }
 }

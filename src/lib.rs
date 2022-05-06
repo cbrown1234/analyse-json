@@ -5,7 +5,7 @@ use jsonpath::Selector;
 use std::error;
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{self, BufRead, Stdin, StdinLock};
+use std::io::{self, BufRead};
 use std::path::PathBuf;
 use clap::Parser;
 
@@ -14,7 +14,7 @@ pub mod json;
 
 type Result<T> = ::std::result::Result<T, Box<dyn error::Error>>;
 
-#[derive(Parser)]
+#[derive(Parser, Default)]
 #[clap(author, version, about, long_about = None)]
 pub struct Cli {
     #[clap(parse(from_os_str))]
