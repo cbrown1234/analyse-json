@@ -1,3 +1,4 @@
+use clap::Parser;
 use flate2::read::GzDecoder;
 use glob::glob;
 use json::ndjson::{parse_json_iterable, parse_ndjson_bufreader, FileStats};
@@ -7,8 +8,6 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-use clap::Parser;
-
 
 pub mod json;
 
@@ -64,13 +63,12 @@ pub fn run(args: Cli) -> Result<()> {
     let stdin_iter = stdin.lock().lines();
     // TODO: Refactor to CLI method?
     let selector;
-    let jsonpath= if let Some(jsonpath) = &args.jsonpath {
+    let jsonpath = if let Some(jsonpath) = &args.jsonpath {
         selector = Selector::new(&jsonpath)?;
         Some(&selector)
     } else {
         None
-    }
-    ;
+    };
 
     // TODO: Impl line limit option
     if let Some(file_path) = &args.file_path {

@@ -1,7 +1,7 @@
 use analyse_json::Cli;
+use clap::Parser;
 use humantime::format_duration;
 use std::{process, time::Instant};
-use clap::Parser;
 
 fn main() {
     let args = Cli::parse();

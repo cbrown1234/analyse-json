@@ -2,6 +2,7 @@ use crate::Cli;
 
 use super::IndexMap;
 use dashmap::DashMap;
+use jsonpath::Selector;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
 pub use serde_json::Value;
@@ -13,7 +14,6 @@ use std::{
     fmt,
     io::{self, prelude::*},
 };
-use jsonpath::Selector;
 
 #[derive(Debug, PartialEq, Default)]
 pub struct FileStats {
@@ -106,7 +106,7 @@ pub fn parse_json_iterable<E>(
             if let Some(json_1) = json_list.next() {
                 // TODO: handle multiple search results
                 assert_eq!(None, json_list.next());
-                json=json_1.to_owned()
+                json = json_1.to_owned()
             } else {
                 fs.empty_lines.push(iter_number);
                 continue;
@@ -127,7 +127,7 @@ pub fn parse_json_iterable<E>(
     Ok(fs)
 }
 
-// TODO: implement jsonpath, empty lines 
+// TODO: implement jsonpath, empty lines
 pub fn parse_json_iterable_par<E>(
     json_iter: impl Iterator<Item = Result<String, E>> + Send,
 ) -> Result<FileStats, E>
@@ -201,7 +201,10 @@ where
 //     }
 // }
 
-pub fn parse_iter<E, I: IntoIterator<Item = Result<String, E>>>(args: &Cli, stdin_iter: I) -> impl Iterator<Item = Result<String, E>> {
+pub fn parse_iter<E, I: IntoIterator<Item = Result<String, E>>>(
+    args: &Cli,
+    stdin_iter: I,
+) -> impl Iterator<Item = Result<String, E>> {
     let stdin_iter = stdin_iter.into_iter();
     let stdin_iter = if let Some(n) = args.lines {
         stdin_iter.take(n)
@@ -211,9 +214,12 @@ pub fn parse_iter<E, I: IntoIterator<Item = Result<String, E>>>(args: &Cli, stdi
     stdin_iter
 }
 
-pub fn parse_ndjson_bufreader(args: &Cli, bufreader: impl BufRead + Send) -> Result<FileStats, std::io::Error> {
+pub fn parse_ndjson_bufreader(
+    args: &Cli,
+    bufreader: impl BufRead + Send,
+) -> Result<FileStats, std::io::Error> {
     let json_iter = bufreader.lines();
-    // TODO: can 
+    // TODO: can
     let json_iter = parse_iter(args, json_iter);
     parse_json_iterable_par(json_iter)
 }
@@ -251,7 +257,6 @@ mod tests {
 
     #[test]
     fn simple_ndjson_file() {
-        
         let mut tmpfile: File = tempfile::tempfile().unwrap();
         writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
         writeln!(tmpfile, r#"{{"key2": 123}}"#).unwrap();
@@ -367,17 +372,12 @@ mod tests {
         let jsonpath = Selector::new("$.a").unwrap();
 
         let expected = FileStats {
-            keys_count: [("$.key2".to_string(), 1)]
+            keys_count: [("$.key2".to_string(), 1)].iter().cloned().collect(),
+            line_count: 3,
+            keys_types_count: [("$.key2::Number".to_string(), 1)]
                 .iter()
                 .cloned()
                 .collect(),
-            line_count: 3,
-            keys_types_count: [
-                ("$.key2::Number".to_string(), 1),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
             empty_lines: vec![1, 3],
             ..Default::default()
         };
