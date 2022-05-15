@@ -3,6 +3,16 @@ name = "analyse-json"
 version = "0.1.0"
 authors = ["Chris Brown <cbrown1234@hotmail.co.uk>"]
 edition = "2021"
+license = "MIT"
+readme = "README.md"
+description = """
+analyse-json is a CLI tool for inspecting (Newline Delimited) NDJSON or JSON
+to understand the contents
+"""
+repository = "https://github.com/cbrown1234/analyse-json"
+documentation = "https://github.com/cbrown1234/analyse-json"
+keywords = ["JSON", "NDJSON", "CLI"]
+categories = ["command-line-utilities", "text-processing"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
