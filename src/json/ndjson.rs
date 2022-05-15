@@ -125,7 +125,7 @@ pub fn parse_json_iterable<E: 'static + Error>(
     Ok(fs)
 }
 
-// TODO: implement jsonpath, empty lines
+// TODO: implement jsonpath
 pub fn parse_json_iterable_par<E>(
     args: &Cli,
     json_iter: impl Iterator<Item = Result<String, E>> + Send,

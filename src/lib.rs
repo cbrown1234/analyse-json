@@ -58,21 +58,10 @@ fn parse_ndjson_file_path(args: &Cli, file_path: &PathBuf) -> Result<FileStats> 
     Ok(parse_ndjson_bufreader(args, buf_reader)?)
 }
 
-// fn parse_stdin<'a>(args: &Cli, stdin: &'a mut StdinLock<'a>) -> impl Iterator<Item = io::Result<String>> + 'a {
-//     let stdin_iter = stdin.lines();
-//     let stdin_iter = if let Some(n) = args.lines {
-//         stdin_iter.take(n)
-//     } else {
-//         stdin_iter.take(usize::MAX)
-//     };
-//     stdin_iter
-// }
-
 pub fn run(args: Cli) -> Result<()> {
     let stdin = io::stdin();
     let stdin_iter = stdin.lock().lines();
 
-    // TODO: Impl line limit option
     if let Some(file_path) = &args.file_path {
         let file_stats = parse_ndjson_file_path(&args, file_path)?;
         println!("{}", file_stats);
@@ -89,7 +78,6 @@ pub fn run(args: Cli) -> Result<()> {
         return Ok(());
     }
 
-    // TODO: Refactor: parse borrow of args around to functions
     // TODO: Fix hang on empty stdin
     let stdin_file_stats = parse_json_iterable(&args, stdin_iter)?;
     if stdin_file_stats != FileStats::default() {
