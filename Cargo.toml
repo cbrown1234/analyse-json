@@ -13,6 +13,11 @@ repository = "https://github.com/cbrown1234/analyse-json"
 documentation = "https://github.com/cbrown1234/analyse-json"
 keywords = ["JSON", "NDJSON", "CLI"]
 categories = ["command-line-utilities", "text-processing"]
+exclude = [
+    "scripts/*",
+    "test_data/*",
+    "test_data_large/*",
+]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
