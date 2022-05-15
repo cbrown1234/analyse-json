@@ -5,7 +5,7 @@ use dashmap::DashMap;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
 pub use serde_json::Value;
-use std::error::{Error, self};
+use std::error::{self, Error};
 use std::fs::File;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
