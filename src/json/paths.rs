@@ -1,6 +1,45 @@
-use serde_json::Value;
+use serde_json::{Value, value::Index};
 
 use super::IndexMap;
+
+pub struct ValuePath<'a> {
+    value: &'a Value,
+    path: Vec<String>,
+}
+
+impl<'a> ValuePath<'a> {
+    pub fn new(value: &'a Value, parent: Option<&Self>) -> Self {
+        let path = if let Some(p) = parent {
+            let mut child_path = p.path.clone();
+            child_path.push(p.value.to_string());
+            child_path
+        } else {
+            vec!["$".to_string()]
+        };
+        ValuePath { value, path: path }
+    }
+
+    pub fn jsonpath(&self) -> String {
+        self.path.join(".")
+    }
+
+    pub fn index(&self, index: impl Index + ToString) -> ValuePath {
+        let mut child_path = self.path.clone();
+        child_path.push(index.to_string());
+        ValuePath { value: &self.value[index], path: child_path }
+    }
+}
+
+
+// impl<'a, I> std::ops::Index<I> for ValuePath<'a>
+// where I: Index + ToString {
+//     type Output = ValuePath<'a>;
+//     fn index(&self, index: I) -> ValuePath {
+//         let mut child_path = self.path.clone();
+//         child_path.push(index.to_string());
+//         ValuePath { value: &self.value[index], path: child_path }
+//     }
+// }
 
 pub fn parse_json_paths(json: &Value) -> Vec<String> {
     let root = String::from("$");
@@ -75,6 +114,36 @@ mod tests {
     use super::*;
 
     use serde_json::json;
+
+    #[test]
+    fn basic_valuepath() {
+        let v = json!({"key1": "value1", "key2": {"subkey1": "value1"}});
+        let vp_0 = ValuePath::new(&v, None);
+
+
+        assert_eq!(vp_0.jsonpath(), "$".to_string());
+        assert_eq!(json!({"b": 1})["a"], Value::Null);
+
+        let v_1 = &v["key2"];
+        let vp_1 = vp_0.index("key2");
+        assert_eq!(vp_1.value, v_1);
+        assert_eq!(vp_1.path, vec!["$".to_string(), "key2".to_string()]);
+        assert_eq!(vp_1.jsonpath(), "$.key2".to_string());
+    }
+
+    #[test]
+    fn basic_valuepath_array() {
+        let v = json!({"key1": "value1", "key2": ["a", "b"]});
+        let vp_0 = ValuePath::new(&v, None);
+
+        let v_2 = &v["key2"][0];
+        let vp_1 = vp_0.index("key2");
+        let vp_2 = vp_1.index(0);
+
+        assert_eq!(vp_2.value, v_2);
+        assert_eq!(vp_2.path, vec!["$".to_string(), "key2".to_string(), "[0]".to_string()]);
+        assert_eq!(vp_1.jsonpath(), "$.key2".to_string());
+    }
 
     #[test]
     fn typical_parse_json_paths() {
