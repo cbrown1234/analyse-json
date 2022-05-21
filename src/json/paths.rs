@@ -2,42 +2,106 @@ use serde_json::{Value, value::Index};
 
 use super::IndexMap;
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct ValuePath<'a> {
     value: &'a Value,
-    path: Vec<String>,
+    path: Vec<String>, // TODO: Switch to Vec<Index> ?
 }
 
 impl<'a> ValuePath<'a> {
-    pub fn new(value: &'a Value, parent: Option<&Self>) -> Self {
-        let path = if let Some(p) = parent {
-            let mut child_path = p.path.clone();
-            child_path.push(p.value.to_string());
-            child_path
-        } else {
-            vec!["$".to_string()]
-        };
-        ValuePath { value, path: path }
+    pub fn new(value: &'a Value, path: Option<Vec<String>>) -> Self {
+        let path = path.unwrap_or(vec!["$".to_string()]);
+        ValuePath { value, path }
     }
 
     pub fn jsonpath(&self) -> String {
         self.path.join(".")
     }
 
-    pub fn index(&self, index: impl Index + ToString) -> ValuePath {
-        let mut child_path = self.path.clone();
-        child_path.push(index.to_string());
+    pub fn index(&self, index: impl JSONPathIndex) -> ValuePath<'a> {
+        let mut child_path = self.path.to_vec();
+        child_path.push(index.jsonpath());
         ValuePath { value: &self.value[index], path: child_path }
     }
 }
 
+pub trait JSONPathIndex: Index {
+    fn jsonpath(&self) -> String;
+}
+
+impl JSONPathIndex for usize {
+    fn jsonpath(&self) -> String {
+        format!("[{}]", self).to_string()
+    }
+}   
+
+impl JSONPathIndex for str {
+    fn jsonpath(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl JSONPathIndex for String {
+    fn jsonpath(&self) -> String {
+        self.to_string()
+    }
+}
+
+impl<'a, T> JSONPathIndex for &'a T
+where T: ?Sized + JSONPathIndex
+{
+    fn jsonpath(&self) -> String {
+        (**self).jsonpath()
+    }
+}
+
+pub fn parse_json_paths_2(
+    json: &Value,
+    explode_array: bool,
+) -> Vec<ValuePath> {
+    let base_valuepath = ValuePath::new(json, None);
+    _parse_json_paths_2(base_valuepath, explode_array)
+}
+
+pub fn _parse_json_paths_2(
+    valuepath: ValuePath,
+    explode_array: bool,
+) -> Vec<ValuePath> {
+    let mut paths = Vec::new();
+
+    match valuepath.value {
+        Value::Object(map) => {
+            for (k, _) in map {
+                let vp = valuepath.index(k);
+                let inner_paths = _parse_json_paths_2(vp, explode_array);
+                paths.extend(inner_paths)
+            }
+        }
+        Value::Array(array) => {
+            if explode_array {
+                for (i, _array_value) in array.iter().enumerate() {
+                    let vp = valuepath.index(i);
+                    let inner_paths = _parse_json_paths_2(vp, explode_array);
+                    paths.extend(inner_paths)
+                }
+            } else {
+                paths.push(valuepath)
+            }
+        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {
+            paths.push(valuepath)
+        }
+    }
+    paths
+}
 
 // impl<'a, I> std::ops::Index<I> for ValuePath<'a>
-// where I: Index + ToString {
+// where I: JSONPathIndex {
 //     type Output = ValuePath<'a>;
-//     fn index(&self, index: I) -> ValuePath {
+//     fn index(&self, index: I) -> &Self::Output {
 //         let mut child_path = self.path.clone();
-//         child_path.push(index.to_string());
-//         ValuePath { value: &self.value[index], path: child_path }
+//         child_path.push(index.jsonpath());
+//         &ValuePath { value: &self.value[index], path: child_path }
 //     }
 // }
 
@@ -119,10 +183,7 @@ mod tests {
     fn basic_valuepath() {
         let v = json!({"key1": "value1", "key2": {"subkey1": "value1"}});
         let vp_0 = ValuePath::new(&v, None);
-
-
         assert_eq!(vp_0.jsonpath(), "$".to_string());
-        assert_eq!(json!({"b": 1})["a"], Value::Null);
 
         let v_1 = &v["key2"];
         let vp_1 = vp_0.index("key2");
@@ -143,6 +204,37 @@ mod tests {
         assert_eq!(vp_2.value, v_2);
         assert_eq!(vp_2.path, vec!["$".to_string(), "key2".to_string(), "[0]".to_string()]);
         assert_eq!(vp_1.jsonpath(), "$.key2".to_string());
+    }
+
+    #[test]
+    fn parse_valuepaths() {
+        let v = json!({"key1": "value1", "key2": ["a", "b"]});
+        let vps = parse_json_paths_2(&v, false);
+
+        let vp_0 = ValuePath::new(&v, None);
+        let vp_1 = ValuePath::new(&v["key1"], Some(vec!["$".to_string(), "key1".to_string()]));
+        let vp_2 = ValuePath::new(&v["key2"], Some(vec!["$".to_string(), "key2".to_string()]));
+        let vp_1_alt = vp_0.index("key1");
+        let vp_2_alt = vp_0.index("key2");
+
+        assert_eq!(vps, vec![vp_1, vp_2]);
+        assert_eq!(vps, vec![vp_1_alt, vp_2_alt]);
+    }
+    #[test]
+    fn parse_valuepaths_explode_array() {
+        let v = json!({"key1": "value1", "key2": ["a", "b"]});
+        let vps = parse_json_paths_2(&v, true);
+
+        let vp_0 = ValuePath::new(&v, None);
+        let vp_1 = ValuePath::new(&v["key1"], Some(vec!["$".to_string(), "key1".to_string()]));
+        let vp_2_1 = ValuePath::new(&v["key2"][0], Some(vec!["$".to_string(), "key2".to_string(), "[0]".to_string()]));
+        let vp_2_2 = ValuePath::new(&v["key2"][1], Some(vec!["$".to_string(), "key2".to_string(), "[1]".to_string()]));
+        let vp_1_alt = vp_0.index("key1");
+        let vp_2_1_alt = vp_0.index("key2").index(0);
+        let vp_2_2_alt = vp_0.index("key2").index(1);
+
+        assert_eq!(vps, vec![vp_1, vp_2_1, vp_2_2]);
+        assert_eq!(vps, vec![vp_1_alt, vp_2_1_alt, vp_2_2_alt]);
     }
 
     #[test]
