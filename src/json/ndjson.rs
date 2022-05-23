@@ -1,6 +1,6 @@
-use crate::Cli;
 use crate::json::paths::ValuePaths;
 use crate::json::ValueType;
+use crate::Cli;
 
 use super::IndexMap;
 use dashmap::DashMap;
@@ -113,7 +113,6 @@ pub fn parse_json_iterable<E: 'static + Error>(
             }
         }
 
-
         for value_path in json.value_paths(false) {
             let path = value_path.jsonpath();
             let counter = fs.keys_count.entry(path.to_owned()).or_insert(0);
@@ -166,7 +165,7 @@ where
                 let path = value_path.jsonpath();
                 let mut counter = keys_count.entry(path.to_owned()).or_insert(0);
                 *counter.value_mut() += 1;
-    
+
                 let type_ = value_path.value.value_type();
                 let path_type = format!("{}::{}", path, type_);
                 let mut counter = keys_types_count.entry(path_type).or_insert(0);

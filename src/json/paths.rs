@@ -1,4 +1,4 @@
-use serde_json::{Value, value::Index};
+use serde_json::{value::Index, Value};
 
 use super::{IndexMap, ValueType};
 
@@ -30,7 +30,10 @@ impl<'a> ValuePath<'a> {
     pub fn index(&self, index: impl JSONPathIndex) -> ValuePath<'a> {
         let mut child_path = self.path.to_vec();
         child_path.push(index.jsonpath());
-        ValuePath { value: &self.value[index], path: child_path }
+        ValuePath {
+            value: &self.value[index],
+            path: child_path,
+        }
     }
 }
 
@@ -42,7 +45,7 @@ impl JSONPathIndex for usize {
     fn jsonpath(&self) -> String {
         format!("[{}]", self).to_string()
     }
-}   
+}
 
 impl JSONPathIndex for str {
     fn jsonpath(&self) -> String {
@@ -57,25 +60,20 @@ impl JSONPathIndex for String {
 }
 
 impl<'a, T> JSONPathIndex for &'a T
-where T: ?Sized + JSONPathIndex
+where
+    T: ?Sized + JSONPathIndex,
 {
     fn jsonpath(&self) -> String {
         (**self).jsonpath()
     }
 }
 
-pub fn parse_value_paths(
-    json: &Value,
-    explode_array: bool,
-) -> Vec<ValuePath> {
+pub fn parse_value_paths(json: &Value, explode_array: bool) -> Vec<ValuePath> {
     let base_valuepath = ValuePath::new(json, None);
     _parse_value_paths(base_valuepath, explode_array)
 }
 
-pub fn _parse_value_paths(
-    valuepath: ValuePath,
-    explode_array: bool,
-) -> Vec<ValuePath> {
+pub fn _parse_value_paths(valuepath: ValuePath, explode_array: bool) -> Vec<ValuePath> {
     let mut paths = Vec::new();
 
     match valuepath.value {
@@ -97,9 +95,7 @@ pub fn _parse_value_paths(
                 paths.push(valuepath)
             }
         }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => {
-            paths.push(valuepath)
-        }
+        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => paths.push(valuepath),
     }
     paths
 }
@@ -115,11 +111,17 @@ pub fn _parse_value_paths(
 // }
 
 pub fn parse_json_paths(json: &Value) -> Vec<String> {
-    json.value_paths(false).into_iter().map(|value_path| {value_path.jsonpath()}).collect()
+    json.value_paths(false)
+        .into_iter()
+        .map(|value_path| value_path.jsonpath())
+        .collect()
 }
 
 pub fn parse_json_paths_types(json: &Value) -> IndexMap<String, String> {
-    json.value_paths(false).into_iter().map(|value_path| {(value_path.jsonpath(), value_path.value.value_type())}).collect()
+    json.value_paths(false)
+        .into_iter()
+        .map(|value_path| (value_path.jsonpath(), value_path.value.value_type()))
+        .collect()
 }
 
 pub trait ValuePaths {
@@ -193,8 +195,14 @@ mod tests {
 
         let vp_0 = ValuePath::new(&v, None);
         let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
-        let vp_2_1 = ValuePath::new(&v["key2"][0], Some(vec!["key2".to_string(), "[0]".to_string()]));
-        let vp_2_2 = ValuePath::new(&v["key2"][1], Some(vec!["key2".to_string(), "[1]".to_string()]));
+        let vp_2_1 = ValuePath::new(
+            &v["key2"][0],
+            Some(vec!["key2".to_string(), "[0]".to_string()]),
+        );
+        let vp_2_2 = ValuePath::new(
+            &v["key2"][1],
+            Some(vec!["key2".to_string(), "[1]".to_string()]),
+        );
         let vp_1_alt = vp_0.index("key1");
         let vp_2_1_alt = vp_0.index("key2").index(0);
         let vp_2_2_alt = vp_0.index("key2").index(1);
