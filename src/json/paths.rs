@@ -1,6 +1,6 @@
 use serde_json::{Value, value::Index};
 
-use super::IndexMap;
+use super::{IndexMap, ValueType};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValuePath<'a> {
@@ -115,71 +115,11 @@ pub fn _parse_value_paths(
 // }
 
 pub fn parse_json_paths(json: &Value) -> Vec<String> {
-    let root = String::from("$");
-    let mut paths = Vec::new();
-    _parse_json_paths(json, root, &mut paths);
-    paths
-}
-
-fn _parse_json_paths<'a>(
-    json: &Value,
-    root: String,
-    paths: &'a mut Vec<String>,
-) -> &'a mut Vec<String> {
-    match json {
-        Value::Object(map) => {
-            for (k, v) in map {
-                let mut obj_root = root.clone();
-                obj_root.push('.');
-                obj_root.push_str(k);
-                _parse_json_paths(v, obj_root, paths);
-            }
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) | Value::Array(_) => {
-            paths.push(root)
-        }
-    }
-    paths
+    json.value_paths(false).into_iter().map(|value_path| {value_path.jsonpath()}).collect()
 }
 
 pub fn parse_json_paths_types(json: &Value) -> IndexMap<String, String> {
-    let root = String::from("$");
-    let mut paths_types = IndexMap::new();
-    _parse_json_paths_types(json, root, &mut paths_types);
-    paths_types
-}
-
-fn _parse_json_paths_types<'a>(
-    json: &Value,
-    root: String,
-    paths_types: &'a mut IndexMap<String, String>,
-) -> &'a mut IndexMap<String, String> {
-    match json {
-        Value::Object(map) => {
-            for (k, v) in map {
-                let mut obj_root = root.clone();
-                obj_root.push('.');
-                obj_root.push_str(k);
-                _parse_json_paths_types(v, obj_root, paths_types);
-            }
-        }
-        Value::Null => {
-            paths_types.insert(root, "Null".to_string());
-        }
-        Value::Bool(_) => {
-            paths_types.insert(root, "Bool".to_string());
-        }
-        Value::Number(_) => {
-            paths_types.insert(root, "Number".to_string());
-        }
-        Value::String(_) => {
-            paths_types.insert(root, "String".to_string());
-        }
-        Value::Array(_) => {
-            paths_types.insert(root, "Array".to_string());
-        }
-    }
-    paths_types
+    json.value_paths(false).into_iter().map(|value_path| {(value_path.jsonpath(), value_path.value.value_type())}).collect()
 }
 
 pub trait ValuePaths {
