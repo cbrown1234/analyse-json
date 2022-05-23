@@ -73,7 +73,7 @@ pub fn parse_value_paths(json: &Value, explode_array: bool) -> Vec<ValuePath> {
     _parse_value_paths(base_valuepath, explode_array)
 }
 
-pub fn _parse_value_paths(valuepath: ValuePath, explode_array: bool) -> Vec<ValuePath> {
+fn _parse_value_paths(valuepath: ValuePath, explode_array: bool) -> Vec<ValuePath> {
     let mut paths = Vec::new();
 
     match valuepath.value {
