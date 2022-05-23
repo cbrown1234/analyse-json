@@ -10,12 +10,21 @@ pub struct ValuePath<'a> {
 
 impl<'a> ValuePath<'a> {
     pub fn new(value: &'a Value, path: Option<Vec<String>>) -> Self {
-        let path = path.unwrap_or(vec!["$".to_string()]);
+        let path = path.unwrap_or(Vec::new());
         ValuePath { value, path }
     }
 
     pub fn jsonpath(&self) -> String {
-        self.path.join(".")
+        let mut jsonpath = String::from("$");
+        for part in &self.path {
+            if part.starts_with('[') {
+                jsonpath.push_str(&part);
+            } else {
+                jsonpath.push('.');
+                jsonpath.push_str(&part);
+            }
+        }
+        jsonpath
     }
 
     pub fn index(&self, index: impl JSONPathIndex) -> ValuePath<'a> {
@@ -188,7 +197,7 @@ mod tests {
         let v_1 = &v["key2"];
         let vp_1 = vp_0.index("key2");
         assert_eq!(vp_1.value, v_1);
-        assert_eq!(vp_1.path, vec!["$".to_string(), "key2".to_string()]);
+        assert_eq!(vp_1.path, vec!["key2".to_string()]);
         assert_eq!(vp_1.jsonpath(), "$.key2".to_string());
     }
 
@@ -202,7 +211,7 @@ mod tests {
         let vp_2 = vp_1.index(0);
 
         assert_eq!(vp_2.value, v_2);
-        assert_eq!(vp_2.path, vec!["$".to_string(), "key2".to_string(), "[0]".to_string()]);
+        assert_eq!(vp_2.path, vec!["key2".to_string(), "[0]".to_string()]);
         assert_eq!(vp_1.jsonpath(), "$.key2".to_string());
     }
 
@@ -212,8 +221,8 @@ mod tests {
         let vps = parse_json_paths_2(&v, false);
 
         let vp_0 = ValuePath::new(&v, None);
-        let vp_1 = ValuePath::new(&v["key1"], Some(vec!["$".to_string(), "key1".to_string()]));
-        let vp_2 = ValuePath::new(&v["key2"], Some(vec!["$".to_string(), "key2".to_string()]));
+        let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
+        let vp_2 = ValuePath::new(&v["key2"], Some(vec!["key2".to_string()]));
         let vp_1_alt = vp_0.index("key1");
         let vp_2_alt = vp_0.index("key2");
 
@@ -226,9 +235,9 @@ mod tests {
         let vps = parse_json_paths_2(&v, true);
 
         let vp_0 = ValuePath::new(&v, None);
-        let vp_1 = ValuePath::new(&v["key1"], Some(vec!["$".to_string(), "key1".to_string()]));
-        let vp_2_1 = ValuePath::new(&v["key2"][0], Some(vec!["$".to_string(), "key2".to_string(), "[0]".to_string()]));
-        let vp_2_2 = ValuePath::new(&v["key2"][1], Some(vec!["$".to_string(), "key2".to_string(), "[1]".to_string()]));
+        let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
+        let vp_2_1 = ValuePath::new(&v["key2"][0], Some(vec!["key2".to_string(), "[0]".to_string()]));
+        let vp_2_2 = ValuePath::new(&v["key2"][1], Some(vec!["key2".to_string(), "[1]".to_string()]));
         let vp_1_alt = vp_0.index("key1");
         let vp_2_1_alt = vp_0.index("key2").index(0);
         let vp_2_2_alt = vp_0.index("key2").index(1);
