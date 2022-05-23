@@ -19,12 +19,15 @@ pub struct Cli {
     #[clap(parse(from_os_str))]
     file_path: Option<std::path::PathBuf>,
 
+    /// Process all files identified by this glob pattern
     #[clap(short, long)]
     glob: Option<String>,
 
+    /// Limit inspection to the first n lines
     #[clap(short = 'n', long)]
     lines: Option<usize>,
 
+    /// JSONpath query to filter/limit the inspection to
     #[clap(long)]
     jsonpath: Option<String>,
 }
