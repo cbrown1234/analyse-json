@@ -64,15 +64,15 @@ where T: ?Sized + JSONPathIndex
     }
 }
 
-pub fn parse_json_paths_2(
+pub fn parse_value_paths(
     json: &Value,
     explode_array: bool,
 ) -> Vec<ValuePath> {
     let base_valuepath = ValuePath::new(json, None);
-    _parse_json_paths_2(base_valuepath, explode_array)
+    _parse_value_paths(base_valuepath, explode_array)
 }
 
-pub fn _parse_json_paths_2(
+pub fn _parse_value_paths(
     valuepath: ValuePath,
     explode_array: bool,
 ) -> Vec<ValuePath> {
@@ -82,7 +82,7 @@ pub fn _parse_json_paths_2(
         Value::Object(map) => {
             for (k, _) in map {
                 let vp = valuepath.index(k);
-                let inner_paths = _parse_json_paths_2(vp, explode_array);
+                let inner_paths = _parse_value_paths(vp, explode_array);
                 paths.extend(inner_paths)
             }
         }
@@ -90,7 +90,7 @@ pub fn _parse_json_paths_2(
             if explode_array {
                 for (i, _array_value) in array.iter().enumerate() {
                     let vp = valuepath.index(i);
-                    let inner_paths = _parse_json_paths_2(vp, explode_array);
+                    let inner_paths = _parse_value_paths(vp, explode_array);
                     paths.extend(inner_paths)
                 }
             } else {
@@ -182,6 +182,16 @@ fn _parse_json_paths_types<'a>(
     paths_types
 }
 
+pub trait ValuePaths {
+    fn value_paths(&self, explode_array: bool) -> Vec<ValuePath>;
+}
+
+impl ValuePaths for Value {
+    fn value_paths(&self, explode_array: bool) -> Vec<ValuePath> {
+        parse_value_paths(self, explode_array)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -219,7 +229,7 @@ mod tests {
     #[test]
     fn parse_valuepaths() {
         let v = json!({"key1": "value1", "key2": ["a", "b"]});
-        let vps = parse_json_paths_2(&v, false);
+        let vps = parse_value_paths(&v, false);
 
         let vp_0 = ValuePath::new(&v, None);
         let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
@@ -227,13 +237,19 @@ mod tests {
         let vp_1_alt = vp_0.index("key1");
         let vp_2_alt = vp_0.index("key2");
 
-        assert_eq!(vps, vec![vp_1, vp_2]);
-        assert_eq!(vps, vec![vp_1_alt, vp_2_alt]);
+        let expected = vec![vp_1, vp_2];
+        let expected_alt = vec![vp_1_alt, vp_2_alt];
+
+        assert_eq!(vps, expected);
+        assert_eq!(vps, expected_alt);
+        assert_eq!(v.value_paths(false), expected);
+        assert_eq!(v.value_paths(false), expected_alt);
     }
+
     #[test]
     fn parse_valuepaths_explode_array() {
         let v = json!({"key1": "value1", "key2": ["a", "b"]});
-        let vps = parse_json_paths_2(&v, true);
+        let vps = parse_value_paths(&v, true);
 
         let vp_0 = ValuePath::new(&v, None);
         let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
