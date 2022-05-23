@@ -30,6 +30,10 @@ pub struct Cli {
     /// JSONpath query to filter/limit the inspection to
     #[clap(long)]
     jsonpath: Option<String>,
+
+    /// Walk the elements of arrays? 
+    #[clap(long)]
+    explode_arrays: bool,
 }
 
 impl Cli {

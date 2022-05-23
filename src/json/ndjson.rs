@@ -113,7 +113,7 @@ pub fn parse_json_iterable<E: 'static + Error>(
             }
         }
 
-        for value_path in json.value_paths(false) {
+        for value_path in json.value_paths(args.explode_arrays) {
             let path = value_path.jsonpath();
             let counter = fs.keys_count.entry(path.to_owned()).or_insert(0);
             *counter += 1;
@@ -161,7 +161,7 @@ where
         })
         .filter_map(|(_i, j)| j.ok())
         .for_each(|json| {
-            for value_path in json.value_paths(false) {
+            for value_path in json.value_paths(args.explode_arrays) {
                 let path = value_path.jsonpath();
                 let mut counter = keys_count.entry(path.to_owned()).or_insert(0);
                 *counter.value_mut() += 1;
