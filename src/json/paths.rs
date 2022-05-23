@@ -4,8 +4,8 @@ use super::IndexMap;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValuePath<'a> {
-    value: &'a Value,
-    path: Vec<String>, // TODO: Switch to Vec<Index> ?
+    pub value: &'a Value,
+    pub path: Vec<String>, // TODO: Switch to Vec<Index> ?
 }
 
 impl<'a> ValuePath<'a> {
