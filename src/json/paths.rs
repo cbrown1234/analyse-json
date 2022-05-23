@@ -213,6 +213,7 @@ mod tests {
         assert_eq!(vp_2.value, v_2);
         assert_eq!(vp_2.path, vec!["key2".to_string(), "[0]".to_string()]);
         assert_eq!(vp_1.jsonpath(), "$.key2".to_string());
+        assert_eq!(vp_2.jsonpath(), "$.key2[0]".to_string())
     }
 
     #[test]
