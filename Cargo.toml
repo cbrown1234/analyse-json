@@ -3,6 +3,7 @@ name = "analyse-json"
 version = "0.1.0"
 authors = ["Chris Brown <cbrown1234@hotmail.co.uk>"]
 edition = "2021"
+rust-version = "1.61"
 license = "MIT"
 readme = "README.md"
 description = """
