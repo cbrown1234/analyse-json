@@ -127,21 +127,23 @@ pub fn parse_json_iterable<E: 'static + Error>(
     Ok(fs)
 }
 
-// TODO: implement jsonpath
 pub fn parse_json_iterable_par<E>(
     args: &Cli,
     json_iter: impl Iterator<Item = Result<String, E>> + Send,
-) -> Result<FileStats, E>
+) -> Result<FileStats, Box<dyn error::Error>>
 where
-    E: Error + Send,
+    E: 'static + Error + Send,
 {
     let keys_count: DashMap<String, usize> = DashMap::new();
     let keys_types_count: DashMap<String, usize> = DashMap::new();
     let mut bad_lines: Vec<usize> = Vec::new();
     let bad_lines_mutex = Mutex::new(&mut bad_lines);
     let line_count = AtomicUsize::new(0);
+    let mut empty_lines: Vec<usize> = Vec::new();
+    let empty_lines_mutex = Mutex::new(&mut empty_lines);
 
     let json_iter = parse_iter(args, json_iter);
+    let jsonpath = args.jsonpath_selector()?;
 
     // Bubble up upstream errors
     let mut err = Ok(());
@@ -159,17 +161,35 @@ where
             }
             line_count.fetch_max(line_num, Ordering::Release);
         })
-        .filter_map(|(_i, j)| j.ok())
-        .for_each(|json| {
-            for value_path in json.value_paths(args.explode_arrays) {
-                let path = value_path.jsonpath();
-                let mut counter = keys_count.entry(path.to_owned()).or_insert(0);
-                *counter.value_mut() += 1;
+        .filter(|(_i, j)| j.is_ok())
+        .map(|(i, j)| (i, j.unwrap()))
+        .for_each(|(i, mut json)| {
+            let mut continue_ = false;
+            if let Some(ref selector) = jsonpath {
+                let mut json_list = selector.find(&json);
+                if let Some(json_1) = json_list.next() {
+                    // TODO: handle multiple search results
+                    assert_eq!(None, json_list.next());
+                    json = json_1.to_owned()
+                } else {
+                    let line_num = i + 1;
+                    let mut empty_lines = empty_lines_mutex.lock().unwrap();
+                    empty_lines.push(line_num);
+                    // continue; doesn't work in for_each
+                    continue_ = true;
+                }
+            }
+            if !continue_ {
+                for value_path in json.value_paths(args.explode_arrays) {
+                    let path = value_path.jsonpath();
+                    let mut counter = keys_count.entry(path.to_owned()).or_insert(0);
+                    *counter.value_mut() += 1;
 
-                let type_ = value_path.value.value_type();
-                let path_type = format!("{}::{}", path, type_);
-                let mut counter = keys_types_count.entry(path_type).or_insert(0);
-                *counter.value_mut() += 1;
+                    let type_ = value_path.value.value_type();
+                    let path_type = format!("{}::{}", path, type_);
+                    let mut counter = keys_types_count.entry(path_type).or_insert(0);
+                    *counter.value_mut() += 1;
+                }
             }
         });
 
@@ -188,7 +208,7 @@ where
             .map(|(k, v)| (k.to_owned(), v.to_owned()))
             .collect(),
         bad_lines,
-        ..Default::default()
+        empty_lines,
     };
     Ok(fs)
 }
@@ -219,12 +239,12 @@ where
 pub fn parse_ndjson_bufreader(
     args: &Cli,
     bufreader: impl BufRead + Send,
-) -> Result<FileStats, io::Error> {
+) -> Result<FileStats, Box<dyn error::Error>> {
     let json_iter = bufreader.lines();
     parse_json_iterable_par(args, json_iter)
 }
 
-pub fn parse_ndjson_file(args: &Cli, file: File) -> Result<FileStats, std::io::Error> {
+pub fn parse_ndjson_file(args: &Cli, file: File) -> Result<FileStats, Box<dyn error::Error>> {
     // if file.metadata().
     parse_ndjson_bufreader(args, io::BufReader::new(file))
 }
@@ -384,6 +404,32 @@ mod tests {
         let mut args = Cli::default();
         args.jsonpath = Some("$.a".to_string());
         let file_stats = parse_json_iterable(&args, iter).unwrap();
+        assert_eq!(expected, file_stats);
+    }
+
+    #[test]
+    fn simple_ndjson_iterable_par_jsonpath() {
+        let iter: Vec<Result<String, std::io::Error>> = vec![
+            Ok(r#"{"key1": 123}"#.to_string()),
+            Ok(r#"{"a": {"key2": 123}}"#.to_string()),
+            Ok(r#"{"key1": 123}"#.to_string()),
+        ];
+        let iter = iter.into_iter();
+
+        let expected = FileStats {
+            keys_count: [("$.key2".to_string(), 1)].iter().cloned().collect(),
+            line_count: 3,
+            keys_types_count: [("$.key2::Number".to_string(), 1)]
+                .iter()
+                .cloned()
+                .collect(),
+            empty_lines: vec![1, 3],
+            ..Default::default()
+        };
+
+        let mut args = Cli::default();
+        args.jsonpath = Some("$.a".to_string());
+        let file_stats = parse_json_iterable_par(&args, iter).unwrap();
         assert_eq!(expected, file_stats);
     }
 }

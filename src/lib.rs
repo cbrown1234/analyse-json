@@ -62,7 +62,7 @@ fn get_bufreader(_args: &Cli, file_path: &std::path::PathBuf) -> Result<Box<dyn 
 
 fn parse_ndjson_file_path(args: &Cli, file_path: &PathBuf) -> Result<FileStats> {
     let buf_reader = get_bufreader(args, file_path)?;
-    Ok(parse_ndjson_bufreader(args, buf_reader)?)
+    parse_ndjson_bufreader(args, buf_reader)
 }
 
 pub fn run(args: Cli) -> Result<()> {
