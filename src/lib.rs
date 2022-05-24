@@ -31,7 +31,7 @@ pub struct Cli {
     #[clap(long)]
     jsonpath: Option<String>,
 
-    /// Walk the elements of arrays? 
+    /// Walk the elements of arrays?
     #[clap(long)]
     explode_arrays: bool,
 }
@@ -39,7 +39,7 @@ pub struct Cli {
 impl Cli {
     fn jsonpath_selector(&self) -> Result<Option<Selector>> {
         let jsonpath_selector = if let Some(jsonpath) = &self.jsonpath {
-            let selector = Selector::new(&jsonpath)?;
+            let selector = Selector::new(jsonpath)?;
             Some(selector)
         } else {
             None
@@ -76,7 +76,7 @@ pub fn run(args: Cli) -> Result<()> {
     }
     if let Some(pattern) = &args.glob {
         println!("Glob '{}':", pattern);
-        for entry in glob(&pattern)? {
+        for entry in glob(pattern)? {
             let path = entry?;
             println!("File '{}':", path.display());
             let file_stats = parse_ndjson_file_path(&args, &path)?;

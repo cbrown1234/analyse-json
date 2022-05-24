@@ -10,7 +10,7 @@ pub struct ValuePath<'a> {
 
 impl<'a> ValuePath<'a> {
     pub fn new(value: &'a Value, path: Option<Vec<String>>) -> Self {
-        let path = path.unwrap_or(Vec::new());
+        let path = path.unwrap_or_default();
         ValuePath { value, path }
     }
 
@@ -18,10 +18,10 @@ impl<'a> ValuePath<'a> {
         let mut jsonpath = String::from("$");
         for part in &self.path {
             if part.starts_with('[') {
-                jsonpath.push_str(&part);
+                jsonpath.push_str(part);
             } else {
                 jsonpath.push('.');
-                jsonpath.push_str(&part);
+                jsonpath.push_str(part);
             }
         }
         jsonpath
@@ -43,7 +43,7 @@ pub trait JSONPathIndex: Index {
 
 impl JSONPathIndex for usize {
     fn jsonpath(&self) -> String {
-        format!("[{}]", self).to_string()
+        format!("[{}]", self)
     }
 }
 

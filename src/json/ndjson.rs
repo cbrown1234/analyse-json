@@ -209,12 +209,11 @@ where
     I: IntoIterator<Item = Result<String, E>>,
 {
     let iter = iter.into_iter();
-    let iter = if let Some(n) = args.lines {
+    if let Some(n) = args.lines {
         iter.take(n)
     } else {
         iter.take(usize::MAX)
-    };
-    iter
+    }
 }
 
 pub fn parse_ndjson_bufreader(
