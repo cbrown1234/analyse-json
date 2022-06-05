@@ -34,6 +34,10 @@ pub struct Cli {
     /// Walk the elements of arrays?
     #[clap(long)]
     explode_arrays: bool,
+
+    /// Include combined results for all files when using glob
+    #[clap(long)]
+    merge: bool,
 }
 
 impl Cli {
@@ -72,12 +76,23 @@ pub fn run(args: Cli) -> Result<()> {
         return Ok(());
     }
     if let Some(pattern) = &args.glob {
+        let mut file_stats_list = Vec::new();
+
         println!("Glob '{}':", pattern);
         for entry in glob(pattern)? {
             let path = entry?;
             println!("File '{}':", path.display());
             let file_stats = parse_ndjson_file_path(&args, &path)?;
             println!("{}", file_stats);
+            if args.merge {
+                file_stats_list.push(file_stats)
+            }
+        }
+        if args.merge {
+            println!("Overall Stats");
+            let overall_file_stats: FileStats = file_stats_list.iter().sum();
+            // TODO: Fix handling of corrupt & empty lines
+            println!("{}", overall_file_stats);
         }
         return Ok(());
     }

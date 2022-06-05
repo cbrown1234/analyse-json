@@ -9,6 +9,8 @@ use rayon::prelude::ParallelIterator;
 pub use serde_json::Value;
 use std::error::{self, Error};
 use std::fs::File;
+use std::iter::Sum;
+use std::ops::Add;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::{
@@ -16,7 +18,7 @@ use std::{
     io::{self, prelude::*},
 };
 
-#[derive(Debug, PartialEq, Default)]
+#[derive(Debug, PartialEq, Default, Clone)]
 pub struct FileStats {
     pub keys_count: IndexMap<String, usize>,
     pub line_count: usize,
@@ -65,6 +67,46 @@ impl fmt::Display for FileStats {
         }
         writeln!(f, "Corrupted lines:\n{:?}", self.bad_lines)?;
         writeln!(f, "Empty lines:\n{:?}", self.empty_lines)
+    }
+}
+
+impl Add for FileStats {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        let mut output = self;
+
+        for (k, v) in rhs.keys_count {
+            let counter = output.keys_count.entry(k).or_insert(0);
+            *counter += v
+        }
+
+        for (k, v) in rhs.keys_types_count {
+            let counter = output.keys_types_count.entry(k).or_insert(0);
+            *counter += v
+        }
+
+        output.line_count += rhs.line_count;
+
+        // Not sure these are compatible
+        output.bad_lines = Vec::new();
+        output.empty_lines = Vec::new();
+
+        output
+    }
+}
+
+impl Add<&Self> for FileStats {
+    type Output = Self;
+
+    fn add(self, rhs: &Self) -> Self::Output {
+        self.add(rhs.clone())
+    }
+}
+
+impl<'a> Sum<&'a Self> for FileStats {
+    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+        iter.fold(Self::default(), |acc, x| acc + x)
     }
 }
 
@@ -431,5 +473,63 @@ mod tests {
         args.jsonpath = Some("$.a".to_string());
         let file_stats = parse_json_iterable_par(&args, iter).unwrap();
         assert_eq!(expected, file_stats);
+    }
+
+    #[test]
+    fn add_filestats() {
+        let lhs = FileStats {
+            keys_count: [("$.key1".to_string(), 3), ("$.key2".to_string(), 2)]
+                .iter()
+                .cloned()
+                .collect(),
+            line_count: 3,
+            keys_types_count: [
+                ("$.key1::Number".to_string(), 3),
+                ("$.key2::Number".to_string(), 2),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            ..Default::default()
+        };
+        let rhs = FileStats {
+            keys_count: [("$.key3".to_string(), 3), ("$.key2".to_string(), 2)]
+                .iter()
+                .cloned()
+                .collect(),
+            line_count: 3,
+            keys_types_count: [
+                ("$.key3::Number".to_string(), 3),
+                ("$.key2::Number".to_string(), 2),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            ..Default::default()
+        };
+        let expected = FileStats {
+            keys_count: [
+                ("$.key1".to_string(), 3),
+                ("$.key2".to_string(), 4),
+                ("$.key3".to_string(), 3),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            line_count: 6,
+            keys_types_count: [
+                ("$.key1::Number".to_string(), 3),
+                ("$.key2::Number".to_string(), 4),
+                ("$.key3::Number".to_string(), 3),
+            ]
+            .iter()
+            .cloned()
+            .collect(),
+            ..Default::default()
+        };
+
+        let actual = lhs + rhs;
+
+        assert_eq!(actual, expected)
     }
 }
