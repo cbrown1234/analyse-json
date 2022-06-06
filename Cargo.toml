@@ -27,7 +27,7 @@ serde_json = "1.0"
 itertools = "0.10.3"
 clap = { version = "3.1.13", features = ["derive"] }
 glob = "0.3"
-indexmap = "1.7.0"
+indexmap = "1.8.0"
 rayon = "1.5"
 dashmap = "4"
 humantime = "2.1"

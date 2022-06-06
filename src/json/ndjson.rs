@@ -325,18 +325,12 @@ mod tests {
         tmpfile.seek(SeekFrom::Start(0)).unwrap();
 
         let expected = FileStats {
-            keys_count: [("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]
-                .iter()
-                .cloned()
-                .collect(),
+            keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
             line_count: 3,
-            keys_types_count: [
+            keys_types_count: IndexMap::from([
                 ("$.key1::Number".to_string(), 2),
                 ("$.key2::Number".to_string(), 1),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
+            ]),
             ..Default::default()
         };
 
@@ -355,18 +349,12 @@ mod tests {
         let iter = iter.into_iter();
 
         let expected = FileStats {
-            keys_count: [("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]
-                .iter()
-                .cloned()
-                .collect(),
+            keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
             line_count: 3,
-            keys_types_count: [
+            keys_types_count: IndexMap::from([
                 ("$.key1::Number".to_string(), 2),
                 ("$.key2::Number".to_string(), 1),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
+            ]),
             ..Default::default()
         };
 
@@ -385,18 +373,12 @@ mod tests {
         let iter = iter.into_iter();
 
         let expected = FileStats {
-            keys_count: [("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]
-                .iter()
-                .cloned()
-                .collect(),
+            keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
             line_count: 3,
-            keys_types_count: [
+            keys_types_count: IndexMap::from([
                 ("$.key1::Number".to_string(), 2),
                 ("$.key2::Number".to_string(), 1),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
+            ]),
             ..Default::default()
         };
 
@@ -432,12 +414,9 @@ mod tests {
         let iter = iter.into_iter();
 
         let expected = FileStats {
-            keys_count: [("$.key2".to_string(), 1)].iter().cloned().collect(),
+            keys_count: IndexMap::from([("$.key2".to_string(), 1)]),
             line_count: 3,
-            keys_types_count: [("$.key2::Number".to_string(), 1)]
-                .iter()
-                .cloned()
-                .collect(),
+            keys_types_count: IndexMap::from([("$.key2::Number".to_string(), 1)]),
             empty_lines: vec![1, 3],
             ..Default::default()
         };
@@ -458,12 +437,9 @@ mod tests {
         let iter = iter.into_iter();
 
         let expected = FileStats {
-            keys_count: [("$.key2".to_string(), 1)].iter().cloned().collect(),
+            keys_count: IndexMap::from([("$.key2".to_string(), 1)]),
             line_count: 3,
-            keys_types_count: [("$.key2::Number".to_string(), 1)]
-                .iter()
-                .cloned()
-                .collect(),
+            keys_types_count: IndexMap::from([("$.key2::Number".to_string(), 1)]),
             empty_lines: vec![1, 3],
             ..Default::default()
         };
@@ -477,53 +453,35 @@ mod tests {
     #[test]
     fn add_filestats() {
         let lhs = FileStats {
-            keys_count: [("$.key1".to_string(), 3), ("$.key2".to_string(), 2)]
-                .iter()
-                .cloned()
-                .collect(),
+            keys_count: IndexMap::from([("$.key1".to_string(), 3), ("$.key2".to_string(), 2)]),
             line_count: 3,
-            keys_types_count: [
+            keys_types_count: IndexMap::from([
                 ("$.key1::Number".to_string(), 3),
                 ("$.key2::Number".to_string(), 2),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
+            ]),
             ..Default::default()
         };
         let rhs = FileStats {
-            keys_count: [("$.key3".to_string(), 3), ("$.key2".to_string(), 2)]
-                .iter()
-                .cloned()
-                .collect(),
+            keys_count: IndexMap::from([("$.key3".to_string(), 3), ("$.key2".to_string(), 2)]),
             line_count: 3,
-            keys_types_count: [
+            keys_types_count: IndexMap::from([
                 ("$.key3::Number".to_string(), 3),
                 ("$.key2::Number".to_string(), 2),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
+            ]),
             ..Default::default()
         };
         let expected = FileStats {
-            keys_count: [
+            keys_count: IndexMap::from([
                 ("$.key1".to_string(), 3),
                 ("$.key2".to_string(), 4),
                 ("$.key3".to_string(), 3),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
+            ]),
             line_count: 6,
-            keys_types_count: [
+            keys_types_count: IndexMap::from([
                 ("$.key1::Number".to_string(), 3),
                 ("$.key2::Number".to_string(), 4),
                 ("$.key3::Number".to_string(), 3),
-            ]
-            .iter()
-            .cloned()
-            .collect(),
+            ]),
             ..Default::default()
         };
 
