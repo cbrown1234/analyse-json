@@ -123,7 +123,7 @@ fn until_err<T, E>(err: &mut &mut Result<(), E>, item: Result<T, E>) -> Option<T
 
 pub fn parse_json_iterable<E: 'static + Error>(
     args: &Cli,
-    json_iter: impl IntoIterator<Item = Result<String, E>>,
+    json_iter: impl Iterator<Item = Result<String, E>>,
 ) -> Result<FileStats, Box<dyn error::Error>> {
     let mut fs = FileStats::new();
 
@@ -268,9 +268,8 @@ where
 
 pub fn parse_iter<E, I>(args: &Cli, iter: I) -> impl Iterator<Item = Result<String, E>>
 where
-    I: IntoIterator<Item = Result<String, E>>,
+    I: Iterator<Item = Result<String, E>>,
 {
-    let iter = iter.into_iter();
     if let Some(n) = args.lines {
         iter.take(n)
     } else {
