@@ -290,26 +290,6 @@ pub fn parse_ndjson_file(args: &Cli, file: File) -> Result<FileStats, Box<dyn er
     parse_ndjson_bufreader(args, io::BufReader::new(file))
 }
 
-pub trait Paths {
-    fn paths(&self) -> Vec<String>;
-}
-
-impl Paths for Value {
-    fn paths(&self) -> Vec<String> {
-        super::paths::parse_json_paths(self)
-    }
-}
-
-pub trait PathTypes {
-    fn path_types(&self) -> IndexMap<String, String>;
-}
-
-impl PathTypes for Value {
-    fn path_types(&self) -> IndexMap<String, String> {
-        super::paths::parse_json_paths_types(self)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
