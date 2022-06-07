@@ -9,7 +9,7 @@ pub struct ValuePath<'a> {
 }
 
 impl<'a> ValuePath<'a> {
-    pub fn new(value: &'a Value, path: Option<Vec<String>>) -> Self {
+    pub fn new(value: &'a Value, path: Option<Vec<String>>) -> ValuePath<'a> {
         let path = path.unwrap_or_default();
         ValuePath { value, path }
     }
@@ -34,6 +34,33 @@ impl<'a> ValuePath<'a> {
             value: &self.value[index],
             path: child_path,
         }
+    }
+
+    fn value_paths(self, explode_array: bool) -> Vec<ValuePath<'a>> {
+        let mut paths = Vec::new();
+
+        match self.value {
+            Value::Object(map) => {
+                for (k, _) in map {
+                    let vp = self.index(k);
+                    let inner_paths = vp.value_paths(explode_array);
+                    paths.extend(inner_paths)
+                }
+            }
+            Value::Array(array) => {
+                if explode_array {
+                    for (i, _array_value) in array.iter().enumerate() {
+                        let vp = self.index(i);
+                        let inner_paths = vp.value_paths(explode_array);
+                        paths.extend(inner_paths)
+                    }
+                } else {
+                    paths.push(self)
+                }
+            }
+            Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => paths.push(self),
+        }
+        paths
     }
 }
 
@@ -68,36 +95,15 @@ where
     }
 }
 
-pub fn parse_value_paths(json: &Value, explode_array: bool) -> Vec<ValuePath> {
-    let base_valuepath = ValuePath::new(json, None);
-    _parse_value_paths(base_valuepath, explode_array)
+pub trait ValuePaths {
+    fn value_paths(&self, explode_array: bool) -> Vec<ValuePath>;
 }
 
-fn _parse_value_paths(valuepath: ValuePath, explode_array: bool) -> Vec<ValuePath> {
-    let mut paths = Vec::new();
-
-    match valuepath.value {
-        Value::Object(map) => {
-            for (k, _) in map {
-                let vp = valuepath.index(k);
-                let inner_paths = _parse_value_paths(vp, explode_array);
-                paths.extend(inner_paths)
-            }
-        }
-        Value::Array(array) => {
-            if explode_array {
-                for (i, _array_value) in array.iter().enumerate() {
-                    let vp = valuepath.index(i);
-                    let inner_paths = _parse_value_paths(vp, explode_array);
-                    paths.extend(inner_paths)
-                }
-            } else {
-                paths.push(valuepath)
-            }
-        }
-        Value::Null | Value::Bool(_) | Value::Number(_) | Value::String(_) => paths.push(valuepath),
+impl ValuePaths for Value {
+    fn value_paths(&self, explode_array: bool) -> Vec<ValuePath> {
+        let base_valuepath = ValuePath::new(self, None);
+        base_valuepath.value_paths(explode_array)
     }
-    paths
 }
 
 // impl<'a, I> std::ops::Index<I> for ValuePath<'a>
@@ -122,16 +128,6 @@ pub fn parse_json_paths_types(json: &Value) -> IndexMap<String, String> {
         .into_iter()
         .map(|value_path| (value_path.jsonpath(), value_path.value.value_type()))
         .collect()
-}
-
-pub trait ValuePaths {
-    fn value_paths(&self, explode_array: bool) -> Vec<ValuePath>;
-}
-
-impl ValuePaths for Value {
-    fn value_paths(&self, explode_array: bool) -> Vec<ValuePath> {
-        parse_value_paths(self, explode_array)
-    }
 }
 
 #[cfg(test)]
@@ -171,7 +167,7 @@ mod tests {
     #[test]
     fn parse_valuepaths() {
         let v = json!({"key1": "value1", "key2": ["a", "b"]});
-        let vps = parse_value_paths(&v, false);
+        let vps = v.value_paths(false);
 
         let vp_0 = ValuePath::new(&v, None);
         let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
@@ -191,7 +187,7 @@ mod tests {
     #[test]
     fn parse_valuepaths_explode_array() {
         let v = json!({"key1": "value1", "key2": ["a", "b"]});
-        let vps = parse_value_paths(&v, true);
+        let vps = v.value_paths(true);
 
         let vp_0 = ValuePath::new(&v, None);
         let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
