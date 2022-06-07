@@ -18,6 +18,7 @@ use std::{
     io::{self, prelude::*},
 };
 
+// TODO: extract stats to separate struct or add "file" id to *_lines
 #[derive(Debug, PartialEq, Default, Clone)]
 pub struct FileStats {
     pub keys_count: IndexMap<String, usize>,
