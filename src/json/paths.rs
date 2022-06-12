@@ -133,6 +133,8 @@ impl ValuePaths for Value {
 
 pub trait JSONPaths {
     fn json_paths(&self, explode_array: bool) -> Vec<String>;
+
+    fn json_paths_types(&self, explode_array: bool) -> IndexMap<String, String>;
 }
 
 impl JSONPaths for Value {
@@ -142,13 +144,7 @@ impl JSONPaths for Value {
             .map(|value_path| value_path.jsonpath())
             .collect()
     }
-}
 
-pub trait JSONPathsTypes {
-    fn json_paths_types(&self, explode_array: bool) -> IndexMap<String, String>;
-}
-
-impl JSONPathsTypes for Value {
     fn json_paths_types(&self, explode_array: bool) -> IndexMap<String, String> {
         self.value_paths(explode_array)
             .into_iter()
