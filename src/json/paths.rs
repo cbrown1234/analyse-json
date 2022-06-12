@@ -9,6 +9,21 @@ pub struct ValuePath<'a> {
 }
 
 impl<'a> ValuePath<'a> {
+    /// Returns a ValuePath (Serde JSON wrapper) useful for tracking the location
+    /// of subsets o
+    ///
+    /// # Arguments
+    /// * `value` - Serde JSON Value
+    /// * `path` - Vec of Strings, components of the JSON path to self.value from the root ($)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use analyse_json::json::paths::ValuePath;
+    ///
+    /// let value = serde_json::json!({"key": "value"});
+    /// let vp = ValuePath::new(&value, None);
+    /// ```
     pub fn new(value: &'a Value, path: Option<Vec<String>>) -> ValuePath<'a> {
         let path = path.unwrap_or_default();
         ValuePath { value, path }
