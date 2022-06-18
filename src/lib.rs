@@ -1,6 +1,7 @@
 use clap::Parser;
 use flate2::read::GzDecoder;
 use glob::glob;
+use grep_cli::is_readable_stdin;
 use json::ndjson::{parse_json_iterable, parse_ndjson_bufreader, FileStats};
 use jsonpath::Selector;
 use std::error;
@@ -69,12 +70,23 @@ fn parse_ndjson_file_path(args: &Cli, file_path: &PathBuf) -> Result<FileStats> 
     parse_ndjson_bufreader(args, buf_reader)
 }
 
-pub fn run(args: Cli) -> Result<()> {
+fn run_stdin(args: Cli) -> Result<()> {
+    let stdin = io::stdin().lock();
+    let stdin_file_stats = parse_json_iterable(&args, stdin.lines())?;
+
+    // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
+    println!("{}", stdin_file_stats);
+
+    Ok(())
+}
+
+fn run_no_stdin(args: Cli) -> Result<()> {
     if let Some(file_path) = &args.file_path {
         let file_stats = parse_ndjson_file_path(&args, file_path)?;
         println!("{}", file_stats);
         return Ok(());
     }
+
     if let Some(pattern) = &args.glob {
         let mut file_stats_list = Vec::new();
 
@@ -96,14 +108,13 @@ pub fn run(args: Cli) -> Result<()> {
         }
         return Ok(());
     }
-
-    let stdin = io::stdin().lock();
-    let stdin_file_stats = parse_json_iterable(&args, stdin.lines())?;
-    if stdin_file_stats != FileStats::default() {
-        // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
-        println!("{}", stdin_file_stats);
-        return Ok(());
-    }
-
     Ok(())
+}
+
+pub fn run(args: Cli) -> Result<()> {
+    if is_readable_stdin() {
+        run_stdin(args)
+    } else {
+        run_no_stdin(args)
+    }
 }

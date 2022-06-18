@@ -25,3 +25,6 @@ Features TODO:
 * Statistical JSON schema inferance
 * Co-occurance of fields matrix
 * ~~"Addition" for file stats (Enables multi-file aggregation of stats)~~
+* Better terminal output
+  * Coloured
+  * tty dependent behaviour
