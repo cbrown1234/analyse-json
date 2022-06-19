@@ -4,8 +4,11 @@ use crate::Cli;
 
 use super::IndexMap;
 use dashmap::DashMap;
+use grep_cli::is_tty_stdout;
+use owo_colors::{OwoColorize, Stream};
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
+use serde::{Deserialize, Serialize};
 pub use serde_json::Value;
 use std::error::{self, Error};
 use std::fs::File;
@@ -19,7 +22,7 @@ use std::{
 };
 
 // TODO: extract stats to separate struct or add "file" id to *_lines
-#[derive(Debug, PartialEq, Default, Clone)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
 pub struct FileStats {
     pub keys_count: IndexMap<String, usize>,
     pub line_count: usize,
@@ -66,8 +69,31 @@ impl fmt::Display for FileStats {
         for (k, v) in self.key_type_occurance() {
             writeln!(f, "{}: {}%", k, v)?;
         }
-        writeln!(f, "Corrupted lines:\n{:?}", self.bad_lines)?;
-        writeln!(f, "Empty lines:\n{:?}", self.empty_lines)
+        writeln!(
+            f,
+            "Corrupted lines:\n{:?}",
+            self.bad_lines
+                .if_supports_color(Stream::Stdout, |text| text.red())
+        )?;
+        writeln!(
+            f,
+            "Empty lines:\n{:?}",
+            self.empty_lines
+                .if_supports_color(Stream::Stdout, |text| text.red())
+        )
+    }
+}
+
+impl FileStats {
+    pub fn print(&self) -> std::result::Result<(), serde_json::Error> {
+        if is_tty_stdout() {
+            println!("{}", self);
+            Ok(())
+        } else {
+            let json_out = serde_json::to_string(self)?;
+            println!("{}", json_out);
+            Ok(())
+        }
     }
 }
 

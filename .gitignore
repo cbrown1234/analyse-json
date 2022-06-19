@@ -3,3 +3,6 @@
 
 # Dev - profiling
 perf*
+
+#Pycharm
+.idea/

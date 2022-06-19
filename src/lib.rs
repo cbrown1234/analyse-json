@@ -83,7 +83,7 @@ fn run_stdin(args: Cli) -> Result<()> {
 fn run_no_stdin(args: Cli) -> Result<()> {
     if let Some(file_path) = &args.file_path {
         let file_stats = parse_ndjson_file_path(&args, file_path)?;
-        println!("{}", file_stats);
+        file_stats.print()?;
         return Ok(());
     }
 

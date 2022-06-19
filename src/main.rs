@@ -12,5 +12,5 @@ fn main() {
 
         process::exit(1);
     }
-    println!("Completed in {}", format_duration(now.elapsed()));
+    eprintln!("Completed in {}", format_duration(now.elapsed()));
 }
