@@ -1,7 +1,9 @@
+use clap::CommandFactory;
 use clap::Parser;
 use flate2::read::GzDecoder;
 use glob::glob;
 use grep_cli::is_readable_stdin;
+use humantime::format_duration;
 use json::ndjson::{parse_json_iterable, parse_ndjson_bufreader, FileStats};
 use jsonpath::Selector;
 use std::error;
@@ -9,13 +11,14 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
+use std::time::Instant;
 
 pub mod json;
 
 type Result<T> = ::std::result::Result<T, Box<dyn error::Error>>;
 
-#[derive(Parser, Default)]
-#[clap(author, version, about, long_about = None, arg_required_else_help(true))]
+#[derive(Parser, Default, PartialEq)]
+#[clap(author, version, about, long_about = None)]
 pub struct Cli {
     #[clap(parse(from_os_str))]
     file_path: Option<std::path::PathBuf>,
@@ -112,9 +115,16 @@ fn run_no_stdin(args: Cli) -> Result<()> {
 }
 
 pub fn run(args: Cli) -> Result<()> {
+    let now = Instant::now();
     if is_readable_stdin() {
-        run_stdin(args)
+        run_stdin(args)?;
+    } else if args == Cli::default() {
+        let mut cmd = Cli::command();
+        cmd.print_help()?;
+        return Ok(());
     } else {
-        run_no_stdin(args)
+        run_no_stdin(args)?;
     }
+    eprintln!("Completed in {}", format_duration(now.elapsed()));
+    Ok(())
 }

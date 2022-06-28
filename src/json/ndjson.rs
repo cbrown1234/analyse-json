@@ -59,6 +59,7 @@ impl FileStats {
 
 impl fmt::Display for FileStats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let stream = Stream::Stdout;
         writeln!(f, "Keys:\n{:#?}\n", self.keys_count.keys())?;
         writeln!(f, "Key occurance counts:\n{:#?}", self.keys_count)?;
         writeln!(f, "Key occurance rate:")?;
@@ -69,18 +70,24 @@ impl fmt::Display for FileStats {
         for (k, v) in self.key_type_occurance() {
             writeln!(f, "{}: {}%", k, v)?;
         }
-        writeln!(
-            f,
-            "Corrupted lines:\n{:?}",
-            self.bad_lines
-                .if_supports_color(Stream::Stdout, |text| text.red())
-        )?;
-        writeln!(
-            f,
-            "Empty lines:\n{:?}",
-            self.empty_lines
-                .if_supports_color(Stream::Stdout, |text| text.red())
-        )
+        if !self.bad_lines.is_empty() {
+            writeln!(
+                f,
+                "{}\n{:?}",
+                "Corrupted lines:".if_supports_color(stream, |text| text.red()),
+                self.bad_lines.if_supports_color(stream, |text| text.red())
+            )?;
+        }
+        if !self.empty_lines.is_empty() {
+            writeln!(
+                f,
+                "{}\n{:?}",
+                "Empty lines:".if_supports_color(stream, |text| text.red()),
+                self.empty_lines
+                    .if_supports_color(stream, |text| text.red())
+            )?;
+        }
+        Ok(())
     }
 }
 
