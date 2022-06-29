@@ -20,6 +20,7 @@ type Result<T> = ::std::result::Result<T, Box<dyn error::Error>>;
 #[derive(Parser, Default, PartialEq)]
 #[clap(author, version, about, long_about = None)]
 pub struct Cli {
+    /// File to process, expected to contain a single JSON object or Newline Delimited (ND) JSON objects
     #[clap(parse(from_os_str))]
     file_path: Option<std::path::PathBuf>,
 
