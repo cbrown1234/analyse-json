@@ -33,8 +33,8 @@ cargo install analyse-json
 * ~~Add multi-file handling (dir/glob)~~
 * ~~Add JSON path search~~ (Can be improved though)
 * ~~Add parallelism to improve performance~~
-* Statistical JSON schema inferance
-* Co-occurance of fields matrix
+* Statistical JSON schema inference
+* Co-occurrence of fields matrix
 * ~~"Addition" for file stats (Enables multi-file aggregation of stats)~~
 * ~~Better terminal output~~
   * ~~Coloured~~
