@@ -1,3 +1,4 @@
+# analyse-json
 CLI tool to analyse Newline Delimited (ND)JSON files and return useful metadata
 about the structure to help you understand the contents
 
@@ -18,13 +19,23 @@ OPTIONS:
     -V, --version                Print version information
 ```
 
-Features TODO:
+## Installation
+### via cargo
+#### Prerequisites
+You need to have cargo installed
+https://doc.rust-lang.org/cargo/getting-started/installation.html
+#### Install
+```
+cargo install analyse-json
+```
+
+## Features TODO:
 * ~~Add multi-file handling (dir/glob)~~
 * ~~Add JSON path search~~ (Can be improved though)
 * ~~Add parallelism to improve performance~~
 * Statistical JSON schema inferance
 * Co-occurance of fields matrix
 * ~~"Addition" for file stats (Enables multi-file aggregation of stats)~~
-* Better terminal output
-  * Coloured
-  * tty dependent behaviour
+* ~~Better terminal output~~
+  * ~~Coloured~~
+  * ~~tty dependent behaviour~~
