@@ -5,7 +5,7 @@ use glob::glob;
 use grep_cli::is_readable_stdin;
 use humantime::format_duration;
 use json::ndjson::{parse_json_iterable, parse_ndjson_bufreader, FileStats};
-use jsonpath::Selector;
+use jsonpath_lib::Compiled;
 use std::error;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -46,9 +46,9 @@ pub struct Cli {
 }
 
 impl Cli {
-    fn jsonpath_selector(&self) -> Result<Option<Selector>> {
+    fn jsonpath_selector(&self) -> Result<Option<Compiled>> {
         let jsonpath_selector = if let Some(jsonpath) = &self.jsonpath {
-            let selector = Selector::new(jsonpath)?;
+            let selector = Compiled::compile(jsonpath)?;
             Some(selector)
         } else {
             None

@@ -6,7 +6,7 @@ fn main() {
     let args = Cli::parse();
 
     if let Err(e) = analyse_json::run(args) {
-        eprintln!("Application error: {}", e);
+        eprintln!("Application error:\n{}", e);
 
         process::exit(1);
     }

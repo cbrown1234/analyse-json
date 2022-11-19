@@ -178,8 +178,9 @@ pub fn parse_json_iterable<E: 'static + Error>(
         };
 
         if let Some(ref selector) = jsonpath {
-            let mut json_list = selector.find(&json);
-            if let Some(json_1) = json_list.next() {
+            let json_list = selector.select(&json)?;
+            let mut json_list = json_list.iter();
+            if let Some(&json_1) = json_list.next() {
                 // TODO: handle multiple search results
                 assert_eq!(None, json_list.next());
                 json = json_1.to_owned()
@@ -242,8 +243,9 @@ where
         .for_each(|(i, mut json)| {
             let mut continue_ = false;
             if let Some(ref selector) = jsonpath {
-                let mut json_list = selector.find(&json);
-                if let Some(json_1) = json_list.next() {
+                let json_list = selector.select(&json).expect("Failed to parse json");
+                let mut json_list = json_list.iter();
+                if let Some(&json_1) = json_list.next() {
                     // TODO: handle multiple search results
                     assert_eq!(None, json_list.next());
                     json = json_1.to_owned()
