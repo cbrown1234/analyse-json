@@ -39,3 +39,11 @@ cargo install analyse-json
 * ~~Better terminal output~~
   * ~~Coloured~~
   * ~~tty dependent behaviour~~
+* Switch to a better JSON query implementation, considering:
+  * Consider for the query language
+    * https://github.com/freestrings/jsonpath
+    * https://github.com/yamafaktory/jql
+    * https://github.com/jmespath/jmespath.rs
+    * https://github.com/onelson/jq-rs
+  * Wrapper to keep track of source lines for 0/1 to many queries?
+* Refactor to implement using iterators
