@@ -22,7 +22,7 @@ use std::{
 };
 
 // TODO: extract stats to separate struct or add "file" id to *_lines
-#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Default, Clone, Serialize, Deserialize)]
 pub struct FileStats {
     pub keys_count: IndexMap<String, usize>,
     pub line_count: usize,

@@ -2,7 +2,7 @@ use serde_json::{value::Index, Value};
 
 use super::{IndexMap, ValueType};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValuePath<'a> {
     pub value: &'a Value,
     pub path: Vec<String>, // TODO: Switch to Vec<Index> ?
