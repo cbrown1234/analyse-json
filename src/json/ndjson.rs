@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 pub use serde_json::Value;
 use std::error::{self, Error};
 use std::fs::File;
-use std::iter::Sum;
+use std::iter::{Enumerate, Sum};
 use std::ops::Add;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
@@ -20,6 +20,54 @@ use std::{
     fmt,
     io::{self, prelude::*},
 };
+
+pub struct EnumeratedErrFiltered<'a, I, E> {
+    iter: Enumerate<I>,
+    errors: &'a mut Vec<(usize, E)>,
+}
+
+impl<'a, E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> EnumeratedErrFiltered<'a, I, E> {
+    pub fn new(iter: I, errors: &'a mut Vec<(usize, E)>) -> Self {
+        Self {
+            iter: iter.enumerate(),
+            errors,
+        }
+    }
+}
+
+impl<'a, E: 'static + Error, T, I> Iterator for EnumeratedErrFiltered<'a, I, E>
+where
+    I: Iterator<Item = Result<T, E>>,
+{
+    type Item = (usize, T);
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (i, next_item) = self.iter.next()?;
+            match next_item {
+                Ok(item) => break Some((i, item)),
+                Err(e) => {
+                    self.errors.push((i, e));
+                }
+            }
+        }
+    }
+}
+
+pub trait IntoEnumeratedErrFiltered<'a, E: 'static + Error, T>:
+    Iterator<Item = Result<T, E>> + Sized
+{
+    fn to_enumerated_err_filtered(
+        self,
+        errors: &'a mut Vec<(usize, E)>,
+    ) -> EnumeratedErrFiltered<'a, Self, E> {
+        EnumeratedErrFiltered::new(self, errors)
+    }
+}
+
+impl<E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> IntoEnumeratedErrFiltered<'_, E, T>
+    for I
+{
+}
 
 // TODO: extract stats to separate struct or add "file" id to *_lines
 #[derive(Debug, PartialEq, Eq, Default, Clone, Serialize, Deserialize)]
