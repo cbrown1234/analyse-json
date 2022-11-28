@@ -4,14 +4,19 @@ use flate2::read::GzDecoder;
 use glob::glob;
 use grep_cli::is_readable_stdin;
 use humantime::format_duration;
-use json::ndjson::{parse_json_iterable, parse_ndjson_bufreader, FileStats};
 use jsonpath_lib::Compiled;
+use std::cell::RefCell;
 use std::error;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::time::Instant;
+
+use crate::json::ndjson::{
+    parse_bufreader, parse_ndjson_file_path, process_json_iterable, FileStats,
+};
 
 pub mod json;
 
@@ -57,7 +62,21 @@ impl Cli {
     }
 }
 
-// TODO: Does this need to be Box<dyn BufRead>? Could it be impl BufRead?
+pub struct Settings {
+    args: Cli,
+    jsonpath_selector: Option<Compiled>,
+}
+
+impl Settings {
+    fn init(args: Cli) -> Result<Self> {
+        let jsonpath_selector = args.jsonpath_selector()?;
+        Ok(Self {
+            args,
+            jsonpath_selector,
+        })
+    }
+}
+
 fn get_bufreader(_args: &Cli, file_path: &std::path::PathBuf) -> Result<Box<dyn BufRead + Send>> {
     let extension = file_path.extension().and_then(OsStr::to_str);
     let file = File::open(file_path)?;
@@ -69,42 +88,56 @@ fn get_bufreader(_args: &Cli, file_path: &std::path::PathBuf) -> Result<Box<dyn 
     }
 }
 
-fn parse_ndjson_file_path(args: &Cli, file_path: &PathBuf) -> Result<FileStats> {
-    let buf_reader = get_bufreader(args, file_path)?;
-    parse_ndjson_bufreader(args, buf_reader)
+fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<FileStats> {
+    let errors = Rc::new(RefCell::new(vec![]));
+
+    let json_iter = parse_ndjson_file_path(&settings.args, file_path, &errors)?;
+    let file_stats = process_json_iterable(settings, json_iter, &errors);
+
+    if !errors.borrow().is_empty() {
+        eprintln!("{errors:#?}");
+    }
+    Ok(file_stats)
 }
 
-fn run_stdin(args: Cli) -> Result<()> {
+fn run_stdin(settings: Settings) -> Result<()> {
     let stdin = io::stdin().lock();
-    let stdin_file_stats = parse_json_iterable(&args, stdin.lines())?;
+    let errors = Rc::new(RefCell::new(vec![]));
+    let json_iter = parse_bufreader(&settings.args, stdin, &errors)?;
+    let stdin_file_stats = process_json_iterable(&settings, json_iter, &errors);
 
+    if !errors.borrow().is_empty() {
+        eprintln!("{errors:#?}");
+    }
     // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
     println!("{}", stdin_file_stats);
-
     Ok(())
 }
 
-fn run_no_stdin(args: Cli) -> Result<()> {
-    if let Some(file_path) = &args.file_path {
-        let file_stats = parse_ndjson_file_path(&args, file_path)?;
-        file_stats.print()?;
+fn run_no_stdin(settings: Settings) -> Result<()> {
+    if let Some(file_path) = &settings.args.file_path {
+        let file_stats = process_ndjson_file_path(&settings, file_path)?;
+
+        // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
+        println!("{}", file_stats);
         return Ok(());
     }
 
-    if let Some(pattern) = &args.glob {
+    if let Some(pattern) = &settings.args.glob {
         let mut file_stats_list = Vec::new();
 
         println!("Glob '{}':", pattern);
         for entry in glob(pattern)? {
-            let path = entry?;
-            println!("File '{}':", path.display());
-            let file_stats = parse_ndjson_file_path(&args, &path)?;
+            let file_path = entry?;
+            println!("File '{}':", file_path.display());
+            let file_stats = process_ndjson_file_path(&settings, &file_path)?;
+            // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
             println!("{}", file_stats);
-            if args.merge {
+            if settings.args.merge {
                 file_stats_list.push(file_stats)
             }
         }
-        if args.merge {
+        if settings.args.merge {
             println!("Overall Stats");
             let overall_file_stats: FileStats = file_stats_list.iter().sum();
             // TODO: Fix handling of corrupt & empty lines
@@ -117,14 +150,15 @@ fn run_no_stdin(args: Cli) -> Result<()> {
 
 pub fn run(args: Cli) -> Result<()> {
     let now = Instant::now();
+    let settings = Settings::init(args)?;
     if is_readable_stdin() {
-        run_stdin(args)?;
-    } else if args == Cli::default() {
+        run_stdin(settings)?;
+    } else if settings.args == Cli::default() {
         let mut cmd = Cli::command();
         cmd.print_help()?;
         return Ok(());
     } else {
-        run_no_stdin(args)?;
+        run_no_stdin(settings)?;
     }
     eprintln!("Completed in {}", format_duration(now.elapsed()));
     Ok(())
