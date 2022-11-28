@@ -1,6 +1,6 @@
 use crate::json::paths::ValuePaths;
 use crate::json::ValueType;
-use crate::Cli;
+use crate::{get_bufreader, Cli, Settings};
 
 use super::IndexMap;
 use dashmap::DashMap;
@@ -10,10 +10,13 @@ use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
 use serde::{Deserialize, Serialize};
 pub use serde_json::Value;
+use std::cell::RefCell;
 use std::error::{self, Error};
 use std::fs::File;
 use std::iter::{Enumerate, Sum};
 use std::ops::Add;
+use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::{
@@ -21,13 +24,97 @@ use std::{
     io::{self, prelude::*},
 };
 
-pub struct EnumeratedErrFiltered<'a, I, E> {
-    iter: Enumerate<I>,
-    errors: &'a mut Vec<(usize, E)>,
+type IdJSON = (String, Value);
+type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
+type IdErr = (String, Box<dyn error::Error>);
+
+pub fn parse_bufreader<'a>(
+    _args: &Cli,
+    reader: impl BufRead + 'a,
+    errors: &Rc<RefCell<Vec<IdErr>>>,
+) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
+    let json_iter = reader.lines();
+
+    let json_iter = json_iter.to_enumerated_err_filtered(Rc::clone(errors));
+
+    let json_iter = json_iter.map(|(i, json_candidate)| {
+        (
+            i.to_string(),
+            serde_json::from_str::<Value>(&json_candidate),
+        )
+    });
+    let json_iter = json_iter.to_err_filtered(Rc::clone(errors));
+
+    Ok(Box::new(json_iter))
 }
 
-impl<'a, E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> EnumeratedErrFiltered<'a, I, E> {
-    pub fn new(iter: I, errors: &'a mut Vec<(usize, E)>) -> Self {
+pub fn parse_ndjson_file<'a>(
+    args: &Cli,
+    file: File,
+    errors: &Rc<RefCell<Vec<IdErr>>>,
+) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
+    let reader = io::BufReader::new(file);
+    parse_bufreader(args, reader, errors)
+}
+
+pub fn parse_ndjson_file_path<'a>(
+    args: &Cli,
+    file_path: &PathBuf,
+    errors: &Rc<RefCell<Vec<IdErr>>>,
+) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
+    let reader = get_bufreader(args, file_path)?;
+    parse_bufreader(args, reader, errors)
+}
+
+pub struct ErrFiltered<I> {
+    iter: I,
+    errors: Rc<RefCell<Vec<IdErr>>>,
+}
+
+impl<E: 'static + Error, T, I: Iterator<Item = (String, Result<T, E>)>> ErrFiltered<I> {
+    pub fn new(iter: I, errors: Rc<RefCell<Vec<IdErr>>>) -> Self {
+        Self { iter, errors }
+    }
+}
+
+impl<E: 'static + Error, T, I> Iterator for ErrFiltered<I>
+where
+    I: Iterator<Item = (String, Result<T, E>)>,
+{
+    type Item = (String, T);
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (id, next_item) = self.iter.next()?;
+            match next_item {
+                Ok(item) => break Some((id, item)),
+                Err(e) => {
+                    self.errors.borrow_mut().push((id, Box::new(e)));
+                }
+            }
+        }
+    }
+}
+
+pub trait IntoErrFiltered<E: 'static + Error, T>:
+    Iterator<Item = (String, Result<T, E>)> + Sized
+{
+    fn to_err_filtered(self, errors: Rc<RefCell<Vec<IdErr>>>) -> ErrFiltered<Self> {
+        ErrFiltered::new(self, errors)
+    }
+}
+
+impl<E: 'static + Error, T, I: Iterator<Item = (String, Result<T, E>)>> IntoErrFiltered<E, T>
+    for I
+{
+}
+
+pub struct EnumeratedErrFiltered<I> {
+    iter: Enumerate<I>,
+    errors: Rc<RefCell<Vec<IdErr>>>,
+}
+
+impl<E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> EnumeratedErrFiltered<I> {
+    pub fn new(iter: I, errors: Rc<RefCell<Vec<IdErr>>>) -> Self {
         Self {
             iter: iter.enumerate(),
             errors,
@@ -35,7 +122,7 @@ impl<'a, E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> EnumeratedErrF
     }
 }
 
-impl<'a, E: 'static + Error, T, I> Iterator for EnumeratedErrFiltered<'a, I, E>
+impl<E: 'static + Error, T, I> Iterator for EnumeratedErrFiltered<I>
 where
     I: Iterator<Item = Result<T, E>>,
 {
@@ -46,25 +133,25 @@ where
             match next_item {
                 Ok(item) => break Some((i, item)),
                 Err(e) => {
-                    self.errors.push((i, e));
+                    self.errors.borrow_mut().push((i.to_string(), Box::new(e)));
                 }
             }
         }
     }
 }
 
-pub trait IntoEnumeratedErrFiltered<'a, E: 'static + Error, T>:
+pub trait IntoEnumeratedErrFiltered<E: 'static + Error, T>:
     Iterator<Item = Result<T, E>> + Sized
 {
     fn to_enumerated_err_filtered(
         self,
-        errors: &'a mut Vec<(usize, E)>,
-    ) -> EnumeratedErrFiltered<'a, Self, E> {
+        errors: Rc<RefCell<Vec<IdErr>>>,
+    ) -> EnumeratedErrFiltered<Self> {
         EnumeratedErrFiltered::new(self, errors)
     }
 }
 
-impl<E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> IntoEnumeratedErrFiltered<'_, E, T>
+impl<E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> IntoEnumeratedErrFiltered<E, T>
     for I
 {
 }
@@ -203,6 +290,96 @@ fn until_err<T, E>(err: &mut &mut Result<(), E>, item: Result<T, E>) -> Option<T
     }
 }
 
+#[derive(Debug, Clone)]
+struct EmptyQueryResultError;
+
+impl fmt::Display for EmptyQueryResultError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "query returned no results")
+    }
+}
+
+impl Error for EmptyQueryResultError {}
+
+pub fn expand_jsonpath_query<'a>(
+    settings: &'a Settings,
+    json_iter: impl Iterator<Item = IdJSON> + 'a,
+    errors: &Rc<RefCell<Vec<IdErr>>>,
+) -> IdJSONIter<'a> {
+    let select_errors = Rc::clone(errors);
+    let missing = Rc::clone(errors);
+    let json_iter_out: IdJSONIter<'a>;
+    if let Some(ref selector) = settings.jsonpath_selector {
+        let path = settings.args.jsonpath.to_owned();
+        let path = path.expect("must exist for jsonpath_selector to exist");
+        let expanded = json_iter.flat_map(move |(ref id, ref json)| {
+            let mut select_errored = false;
+            let selected = selector.select(json).unwrap_or_else(|e| {
+                select_errors
+                    .borrow_mut()
+                    .push((id.to_owned(), Box::new(e)));
+                select_errored = true;
+                vec![]
+            });
+            if selected.is_empty() && !select_errored {
+                missing
+                    .borrow_mut()
+                    .push((id.to_owned(), Box::new(EmptyQueryResultError)))
+            }
+            selected
+                .into_iter()
+                .map(|json| (format!("{id}:{path}"), json.to_owned()))
+                .enumerate()
+                .map(|(i, (id, json))| (format!("{id}[{i}]"), json))
+                .collect::<Vec<_>>()
+        });
+        json_iter_out = Box::new(expanded);
+    } else {
+        json_iter_out = Box::new(json_iter);
+    }
+    json_iter_out
+}
+
+pub fn apply_settings<'a>(
+    settings: &'a Settings,
+    json_iter: impl Iterator<Item = IdJSON> + 'a,
+    errors: &Rc<RefCell<Vec<IdErr>>>,
+) -> IdJSONIter<'a> {
+    let args = &settings.args;
+
+    let json_iter = limit(args, json_iter);
+    expand_jsonpath_query(settings, json_iter, errors)
+}
+
+pub fn process_json_iterable(
+    settings: &Settings,
+    json_iter: impl Iterator<Item = IdJSON>,
+    errors: &Rc<RefCell<Vec<IdErr>>>,
+) -> FileStats {
+    let mut fs = FileStats::new();
+    let args = &settings.args;
+
+    let json_iter = apply_settings(settings, json_iter, errors);
+
+    for (i, (_id, json)) in json_iter.enumerate() {
+        let iter_number = i + 1;
+        fs.line_count = iter_number;
+
+        for value_path in json.value_paths(args.explode_arrays) {
+            let path = value_path.jsonpath();
+            let counter = fs.keys_count.entry(path.to_owned()).or_insert(0);
+            *counter += 1;
+
+            let type_ = value_path.value.value_type();
+            let path_type = format!("{}::{}", path, type_);
+            let counter = fs.keys_types_count.entry(path_type).or_insert(0);
+            *counter += 1;
+        }
+    }
+    fs
+}
+
+#[deprecated]
 pub fn parse_json_iterable<E: 'static + Error>(
     args: &Cli,
     json_iter: impl Iterator<Item = Result<String, E>>,
@@ -252,6 +429,7 @@ pub fn parse_json_iterable<E: 'static + Error>(
     Ok(fs)
 }
 
+#[deprecated]
 pub fn parse_json_iterable_par<E>(
     args: &Cli,
     json_iter: impl Iterator<Item = Result<String, E>> + Send,
@@ -350,6 +528,17 @@ where
 //     }
 // }
 
+pub fn limit<'a, I, T>(args: &Cli, iter: I) -> Box<dyn Iterator<Item = T> + 'a>
+where
+    I: Iterator<Item = T> + 'a,
+{
+    if let Some(n) = args.lines {
+        Box::new(iter.take(n))
+    } else {
+        Box::new(iter)
+    }
+}
+
 pub fn parse_iter<E, I>(args: &Cli, iter: I) -> impl Iterator<Item = Result<String, E>>
 where
     I: Iterator<Item = Result<String, E>>,
@@ -361,6 +550,7 @@ where
     }
 }
 
+#[deprecated]
 pub fn parse_ndjson_bufreader(
     args: &Cli,
     bufreader: impl BufRead + Send,
@@ -369,24 +559,98 @@ pub fn parse_ndjson_bufreader(
     parse_json_iterable_par(args, json_iter)
 }
 
-pub fn parse_ndjson_file(args: &Cli, file: File) -> Result<FileStats, Box<dyn error::Error>> {
-    // if file.metadata().
-    parse_ndjson_bufreader(args, io::BufReader::new(file))
-}
-
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
     use std::fs::File;
     use std::io::{Seek, SeekFrom, Write};
 
     #[test]
-    fn simple_ndjson_file() {
+    fn simple_ndjson() {
         let mut tmpfile: File = tempfile::tempfile().unwrap();
         writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
         writeln!(tmpfile, r#"{{"key2": 123}}"#).unwrap();
         writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
         tmpfile.seek(SeekFrom::Start(0)).unwrap();
+        let reader = io::BufReader::new(tmpfile);
+
+        let expected: Vec<IdJSON> = vec![
+            (0.to_string(), json!({"key1": 123})),
+            (1.to_string(), json!({"key2": 123})),
+            (2.to_string(), json!({"key1": 123})),
+        ];
+
+        let args = Cli::default();
+        let errors = Rc::new(RefCell::new(vec![]));
+
+        let json_iter = parse_bufreader(&args, reader, &errors).unwrap();
+        assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
+        assert!(errors.borrow().is_empty())
+    }
+
+    #[test]
+    fn bad_ndjson_file() {
+        let mut tmpfile: File = tempfile::tempfile().unwrap();
+        writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
+        writeln!(tmpfile, r#"not valid json"#).unwrap();
+        writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
+        tmpfile.seek(SeekFrom::Start(0)).unwrap();
+        let reader = io::BufReader::new(tmpfile);
+
+        let expected: Vec<IdJSON> = vec![
+            (0.to_string(), json!({"key1": 123})),
+            (2.to_string(), json!({"key1": 123})),
+        ];
+
+        let args = Cli::default();
+        let errors = Rc::new(RefCell::new(vec![]));
+
+        let json_iter = parse_bufreader(&args, reader, &errors).unwrap();
+        assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
+        assert!(errors.borrow().len() == 1)
+    }
+
+    #[test]
+    fn simple_expand_jsonpath_query() {
+        let json_iter_in: Vec<IdJSON> = vec![
+            (0.to_string(), json!({"key1": [1, 2, 3]})),
+            (1.to_string(), json!({"key2": 123})),
+            (2.to_string(), json!({"key1": [4, 5]})),
+        ];
+        let json_iter_in = json_iter_in.iter().cloned();
+
+        let mut args = Cli::default();
+        args.jsonpath = Some("$.key1[*]".to_string());
+        let settings = Settings::init(args).unwrap();
+        let errors = Rc::new(RefCell::new(vec![]));
+
+        let expected: Vec<IdJSON> = vec![
+            ("0:$.key1[*][0]".to_string(), json!(1)),
+            ("0:$.key1[*][1]".to_string(), json!(2)),
+            ("0:$.key1[*][2]".to_string(), json!(3)),
+            ("2:$.key1[*][0]".to_string(), json!(4)),
+            ("2:$.key1[*][1]".to_string(), json!(5)),
+        ];
+
+        let json_iter = expand_jsonpath_query(&settings, json_iter_in, &errors);
+        assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
+        assert!(errors.borrow().len() == 1)
+    }
+
+    #[test]
+    fn simple_process_json_iterable() {
+        let json_iter_in: Vec<IdJSON> = vec![
+            (0.to_string(), json!({"key1": 123})),
+            (1.to_string(), json!({"key2": 123})),
+            (2.to_string(), json!({"key1": 123})),
+        ];
+        let json_iter_in = json_iter_in.iter().cloned();
+
+        let args = Cli::default();
+        let settings = Settings::init(args).unwrap();
+        let errors = Rc::new(RefCell::new(vec![]));
 
         let expected = FileStats {
             keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
@@ -398,9 +662,9 @@ mod tests {
             ..Default::default()
         };
 
-        let args = Cli::default();
-        let file_stats = parse_ndjson_file(&args, tmpfile).unwrap();
+        let file_stats = process_json_iterable(&settings, json_iter_in, &errors);
         assert_eq!(expected, file_stats);
+        assert!(errors.borrow().is_empty())
     }
 
     #[test]
@@ -448,23 +712,6 @@ mod tests {
 
         let args = Cli::default();
         let file_stats = parse_json_iterable_par(&args, iter).unwrap();
-        assert_eq!(expected, file_stats);
-    }
-
-    #[test]
-    fn bad_ndjson_file() {
-        let mut tmpfile: File = tempfile::tempfile().unwrap();
-        writeln!(tmpfile, "{{").unwrap();
-        tmpfile.seek(SeekFrom::Start(0)).unwrap();
-
-        let expected = FileStats {
-            bad_lines: vec![1],
-            line_count: 1,
-            ..Default::default()
-        };
-
-        let args = Cli::default();
-        let file_stats = parse_ndjson_file(&args, tmpfile).unwrap();
         assert_eq!(expected, file_stats);
     }
 
