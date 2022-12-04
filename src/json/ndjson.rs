@@ -28,7 +28,7 @@ type IdJSON = (String, Value);
 type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
 type IdErr = (String, Box<dyn error::Error>);
 
-pub fn parse_bufreader<'a>(
+pub fn parse_ndjson_bufreader<'a>(
     _args: &Cli,
     reader: impl BufRead + 'a,
     errors: &Rc<RefCell<Vec<IdErr>>>,
@@ -54,7 +54,7 @@ pub fn parse_ndjson_file<'a>(
     errors: &Rc<RefCell<Vec<IdErr>>>,
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
     let reader = io::BufReader::new(file);
-    parse_bufreader(args, reader, errors)
+    parse_ndjson_bufreader(args, reader, errors)
 }
 
 pub fn parse_ndjson_file_path<'a>(
@@ -63,7 +63,7 @@ pub fn parse_ndjson_file_path<'a>(
     errors: &Rc<RefCell<Vec<IdErr>>>,
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
     let reader = get_bufreader(args, file_path)?;
-    parse_bufreader(args, reader, errors)
+    parse_ndjson_bufreader(args, reader, errors)
 }
 
 pub struct ErrFiltered<I> {
@@ -380,56 +380,6 @@ pub fn process_json_iterable(
 }
 
 #[deprecated]
-pub fn parse_json_iterable<E: 'static + Error>(
-    args: &Cli,
-    json_iter: impl Iterator<Item = Result<String, E>>,
-) -> Result<FileStats, Box<dyn error::Error>> {
-    let mut fs = FileStats::new();
-
-    let json_iter = parse_iter(args, json_iter);
-    let jsonpath = args.jsonpath_selector()?;
-
-    for (i, json_candidate) in json_iter.enumerate() {
-        let json_candidate = json_candidate?;
-        let iter_number = i + 1;
-        fs.line_count = iter_number;
-
-        let mut json: Value = match serde_json::from_str(&json_candidate) {
-            Ok(v) => v,
-            Err(_) => {
-                fs.bad_lines.push(iter_number);
-                continue;
-            }
-        };
-
-        if let Some(ref selector) = jsonpath {
-            let json_list = selector.select(&json)?;
-            let mut json_list = json_list.iter();
-            if let Some(&json_1) = json_list.next() {
-                // TODO: handle multiple search results
-                assert_eq!(None, json_list.next());
-                json = json_1.to_owned()
-            } else {
-                fs.empty_lines.push(iter_number);
-                continue;
-            }
-        }
-
-        for value_path in json.value_paths(args.explode_arrays) {
-            let path = value_path.jsonpath();
-            let counter = fs.keys_count.entry(path.to_owned()).or_insert(0);
-            *counter += 1;
-
-            let type_ = value_path.value.value_type();
-            let path_type = format!("{}::{}", path, type_);
-            let counter = fs.keys_types_count.entry(path_type).or_insert(0);
-            *counter += 1;
-        }
-    }
-    Ok(fs)
-}
-
-#[deprecated]
 pub fn parse_json_iterable_par<E>(
     args: &Cli,
     json_iter: impl Iterator<Item = Result<String, E>> + Send,
@@ -550,15 +500,6 @@ where
     }
 }
 
-#[deprecated]
-pub fn parse_ndjson_bufreader(
-    args: &Cli,
-    bufreader: impl BufRead + Send,
-) -> Result<FileStats, Box<dyn error::Error>> {
-    let json_iter = bufreader.lines();
-    parse_json_iterable_par(args, json_iter)
-}
-
 #[cfg(test)]
 mod tests {
     use serde_json::json;
@@ -585,7 +526,7 @@ mod tests {
         let args = Cli::default();
         let errors = Rc::new(RefCell::new(vec![]));
 
-        let json_iter = parse_bufreader(&args, reader, &errors).unwrap();
+        let json_iter = parse_ndjson_bufreader(&args, reader, &errors).unwrap();
         assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
         assert!(errors.borrow().is_empty())
     }
@@ -607,7 +548,7 @@ mod tests {
         let args = Cli::default();
         let errors = Rc::new(RefCell::new(vec![]));
 
-        let json_iter = parse_bufreader(&args, reader, &errors).unwrap();
+        let json_iter = parse_ndjson_bufreader(&args, reader, &errors).unwrap();
         assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
         assert!(errors.borrow().len() == 1)
     }
@@ -668,30 +609,6 @@ mod tests {
     }
 
     #[test]
-    fn simple_ndjson_iterable() {
-        let iter: Vec<Result<String, std::io::Error>> = vec![
-            Ok(r#"{"key1": 123}"#.to_string()),
-            Ok(r#"{"key2": 123}"#.to_string()),
-            Ok(r#"{"key1": 123}"#.to_string()),
-        ];
-        let iter = iter.into_iter();
-
-        let expected = FileStats {
-            keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
-            line_count: 3,
-            keys_types_count: IndexMap::from([
-                ("$.key1::Number".to_string(), 2),
-                ("$.key2::Number".to_string(), 1),
-            ]),
-            ..Default::default()
-        };
-
-        let args = Cli::default();
-        let file_stats = parse_json_iterable(&args, iter).unwrap();
-        assert_eq!(expected, file_stats);
-    }
-
-    #[test]
     fn simple_ndjson_iterable_par() {
         let iter: Vec<Result<String, std::io::Error>> = vec![
             Ok(r#"{"key1": 123}"#.to_string()),
@@ -712,29 +629,6 @@ mod tests {
 
         let args = Cli::default();
         let file_stats = parse_json_iterable_par(&args, iter).unwrap();
-        assert_eq!(expected, file_stats);
-    }
-
-    #[test]
-    fn simple_ndjson_iterable_jsonpath() {
-        let iter: Vec<Result<String, std::io::Error>> = vec![
-            Ok(r#"{"key1": 123}"#.to_string()),
-            Ok(r#"{"a": {"key2": 123}}"#.to_string()),
-            Ok(r#"{"key1": 123}"#.to_string()),
-        ];
-        let iter = iter.into_iter();
-
-        let expected = FileStats {
-            keys_count: IndexMap::from([("$.key2".to_string(), 1)]),
-            line_count: 3,
-            keys_types_count: IndexMap::from([("$.key2::Number".to_string(), 1)]),
-            empty_lines: vec![1, 3],
-            ..Default::default()
-        };
-
-        let mut args = Cli::default();
-        args.jsonpath = Some("$.a".to_string());
-        let file_stats = parse_json_iterable(&args, iter).unwrap();
         assert_eq!(expected, file_stats);
     }
 

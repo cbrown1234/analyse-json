@@ -15,7 +15,7 @@ use std::rc::Rc;
 use std::time::Instant;
 
 use crate::json::ndjson::{
-    parse_bufreader, parse_ndjson_file_path, process_json_iterable, FileStats,
+    parse_ndjson_bufreader, parse_ndjson_file_path, process_json_iterable, FileStats,
 };
 
 pub mod json;
@@ -103,7 +103,7 @@ fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<
 fn run_stdin(settings: Settings) -> Result<()> {
     let stdin = io::stdin().lock();
     let errors = Rc::new(RefCell::new(vec![]));
-    let json_iter = parse_bufreader(&settings.args, stdin, &errors)?;
+    let json_iter = parse_ndjson_bufreader(&settings.args, stdin, &errors)?;
     let stdin_file_stats = process_json_iterable(&settings, json_iter, &errors);
 
     if !errors.borrow().is_empty() {

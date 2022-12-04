@@ -32,7 +32,7 @@ cargo install analyse-json
 ## Features TODO:
 * ~~Add multi-file handling (dir/glob)~~
 * ~~Add JSON path search~~ (Can be improved though)
-* ~~Add parallelism to improve performance~~
+* ~~Add parallelism to improve performance~~ (Removed when refactoring as iterator adapters, will reconsider later)
 * Statistical JSON schema inference
 * Co-occurrence of fields matrix
 * ~~"Addition" for file stats (Enables multi-file aggregation of stats)~~
