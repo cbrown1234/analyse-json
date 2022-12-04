@@ -109,8 +109,8 @@ fn run_stdin(settings: Settings) -> Result<()> {
     if !errors.borrow().is_empty() {
         eprintln!("{errors:#?}");
     }
-    // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
-    println!("{}", stdin_file_stats);
+
+    stdin_file_stats.print()?;
     Ok(())
 }
 
@@ -118,8 +118,7 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
     if let Some(file_path) = &settings.args.file_path {
         let file_stats = process_ndjson_file_path(&settings, file_path)?;
 
-        // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
-        println!("{}", file_stats);
+        file_stats.print()?;
         return Ok(());
     }
 
@@ -131,8 +130,8 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
             let file_path = entry?;
             println!("File '{}':", file_path.display());
             let file_stats = process_ndjson_file_path(&settings, &file_path)?;
-            // TODO: change output format depending on if writing to tty or stdout pipe (e.g. ripgrep)
-            println!("{}", file_stats);
+
+            file_stats.print()?;
             if settings.args.merge {
                 file_stats_list.push(file_stats)
             }
@@ -141,7 +140,7 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
             println!("Overall Stats");
             let overall_file_stats: FileStats = file_stats_list.iter().sum();
             // TODO: Fix handling of corrupt & empty lines
-            println!("{}", overall_file_stats);
+            overall_file_stats.print()?;
         }
         return Ok(());
     }

@@ -232,7 +232,7 @@ impl FileStats {
             println!("{}", self);
             Ok(())
         } else {
-            let json_out = serde_json::to_string(self)?;
+            let json_out = serde_json::to_string_pretty(self)?;
             println!("{}", json_out);
             Ok(())
         }
