@@ -361,9 +361,8 @@ pub fn process_json_iterable(
 
     let json_iter = apply_settings(settings, json_iter, errors);
 
-    for (i, (_id, json)) in json_iter.enumerate() {
-        let iter_number = i + 1;
-        fs.line_count = iter_number;
+    for (_id, json) in json_iter {
+        fs.line_count += 1;
 
         for value_path in json.value_paths(args.explode_arrays) {
             let path = value_path.jsonpath();
