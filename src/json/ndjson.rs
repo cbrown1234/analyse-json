@@ -5,6 +5,7 @@ use crate::{get_bufreader, Cli, Settings};
 use super::IndexMap;
 use dashmap::DashMap;
 use grep_cli::is_tty_stdout;
+use jsonpath_lib::JsonPathError;
 use owo_colors::{OwoColorize, Stream};
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
@@ -24,14 +25,82 @@ use std::{
     io::{self, prelude::*},
 };
 
+#[derive(Debug)]
+pub struct IndexedNDJSONError {
+    location: String,
+    error: NDJSONError,
+}
+
+impl IndexedNDJSONError {
+    fn new(location: String, error: NDJSONError) -> Self {
+        Self { location, error }
+    }
+}
+
+impl fmt::Display for IndexedNDJSONError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{} {}", self.location, self.error)
+    }
+}
+
+#[derive(Debug)]
+pub enum NDJSONError {
+    IOError(io::Error),
+    JSONParsingError(serde_json::Error),
+    EmptyQuery,
+    QueryJsonPathError(JsonPathError),
+}
+
+impl fmt::Display for NDJSONError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            NDJSONError::IOError(_e) => write!(f, "line failed due to an IO error"),
+            NDJSONError::JSONParsingError(_e) => write!(f, "line failed to parse as valid JSON"),
+            // The wrapped error contains additional information and is available
+            // via the source() method.
+            NDJSONError::EmptyQuery => write!(f, "line returned empty for ther given query"),
+            NDJSONError::QueryJsonPathError(_e) => {
+                write!(f, "line failed due to a JsonPath Query error")
+            }
+        }
+    }
+}
+
+impl error::Error for NDJSONError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match *self {
+            NDJSONError::IOError(ref e) => Some(e),
+            NDJSONError::JSONParsingError(ref e) => Some(e),
+            // The cause is the underlying implementation error type. Is implicitly
+            // cast to the trait object `&error::Error`. This works because the
+            // underlying type already implements the `Error` trait.
+            NDJSONError::EmptyQuery => None,
+            NDJSONError::QueryJsonPathError(ref e) => Some(e),
+        }
+    }
+}
+
+impl From<io::Error> for NDJSONError {
+    fn from(err: io::Error) -> NDJSONError {
+        NDJSONError::IOError(err)
+    }
+}
+
+impl From<serde_json::Error> for NDJSONError {
+    fn from(err: serde_json::Error) -> NDJSONError {
+        NDJSONError::JSONParsingError(err)
+    }
+}
+
 type IdJSON = (String, Value);
 type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
-type IdErr = (String, Box<dyn error::Error>);
+type Errors<E> = Rc<RefCell<Vec<E>>>;
+type NDJSONErrors = Errors<IndexedNDJSONError>;
 
 pub fn parse_ndjson_bufreader<'a>(
     _args: &Cli,
     reader: impl BufRead + 'a,
-    errors: &Rc<RefCell<Vec<IdErr>>>,
+    errors: &NDJSONErrors,
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
     let json_iter = reader.lines();
 
@@ -51,7 +120,7 @@ pub fn parse_ndjson_bufreader<'a>(
 pub fn parse_ndjson_file<'a>(
     args: &Cli,
     file: File,
-    errors: &Rc<RefCell<Vec<IdErr>>>,
+    errors: &NDJSONErrors,
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
     let reader = io::BufReader::new(file);
     parse_ndjson_bufreader(args, reader, errors)
@@ -60,26 +129,26 @@ pub fn parse_ndjson_file<'a>(
 pub fn parse_ndjson_file_path<'a>(
     args: &Cli,
     file_path: &PathBuf,
-    errors: &Rc<RefCell<Vec<IdErr>>>,
+    errors: &NDJSONErrors,
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
     let reader = get_bufreader(args, file_path)?;
     parse_ndjson_bufreader(args, reader, errors)
 }
 
-pub struct ErrFiltered<I> {
+pub struct ErrFiltered<I, E> {
     iter: I,
-    errors: Rc<RefCell<Vec<IdErr>>>,
+    errors: Errors<E>,
 }
 
-impl<E: 'static + Error, T, I: Iterator<Item = (String, Result<T, E>)>> ErrFiltered<I> {
-    pub fn new(iter: I, errors: Rc<RefCell<Vec<IdErr>>>) -> Self {
+impl<E, T, I: Iterator<Item = (String, Result<T, W>)>, W> ErrFiltered<I, E> {
+    pub fn new(iter: I, errors: Errors<E>) -> Self {
         Self { iter, errors }
     }
 }
 
-impl<E: 'static + Error, T, I> Iterator for ErrFiltered<I>
+impl<T, I> Iterator for ErrFiltered<I, IndexedNDJSONError>
 where
-    I: Iterator<Item = (String, Result<T, E>)>,
+    I: Iterator<Item = (String, Result<T, serde_json::Error>)>,
 {
     type Item = (String, T);
     fn next(&mut self) -> Option<Self::Item> {
@@ -88,33 +157,31 @@ where
             match next_item {
                 Ok(item) => break Some((id, item)),
                 Err(e) => {
-                    self.errors.borrow_mut().push((id, Box::new(e)));
+                    self.errors.borrow_mut().push(IndexedNDJSONError::new(
+                        id,
+                        NDJSONError::JSONParsingError(e),
+                    ));
                 }
             }
         }
     }
 }
 
-pub trait IntoErrFiltered<E: 'static + Error, T>:
-    Iterator<Item = (String, Result<T, E>)> + Sized
-{
-    fn to_err_filtered(self, errors: Rc<RefCell<Vec<IdErr>>>) -> ErrFiltered<Self> {
+pub trait IntoErrFiltered<E, T, W>: Iterator<Item = (String, Result<T, W>)> + Sized {
+    fn to_err_filtered(self, errors: Errors<E>) -> ErrFiltered<Self, E> {
         ErrFiltered::new(self, errors)
     }
 }
 
-impl<E: 'static + Error, T, I: Iterator<Item = (String, Result<T, E>)>> IntoErrFiltered<E, T>
-    for I
-{
-}
+impl<E, T, I: Iterator<Item = (String, Result<T, W>)>, W> IntoErrFiltered<E, T, W> for I {}
 
-pub struct EnumeratedErrFiltered<I> {
+pub struct EnumeratedErrFiltered<I, E> {
     iter: Enumerate<I>,
-    errors: Rc<RefCell<Vec<IdErr>>>,
+    errors: Errors<E>,
 }
 
-impl<E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> EnumeratedErrFiltered<I> {
-    pub fn new(iter: I, errors: Rc<RefCell<Vec<IdErr>>>) -> Self {
+impl<E, T, I: Iterator<Item = Result<T, W>>, W> EnumeratedErrFiltered<I, E> {
+    pub fn new(iter: I, errors: Errors<E>) -> Self {
         Self {
             iter: iter.enumerate(),
             errors,
@@ -122,9 +189,9 @@ impl<E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> EnumeratedErrFilte
     }
 }
 
-impl<E: 'static + Error, T, I> Iterator for EnumeratedErrFiltered<I>
+impl<T, I> Iterator for EnumeratedErrFiltered<I, IndexedNDJSONError>
 where
-    I: Iterator<Item = Result<T, E>>,
+    I: Iterator<Item = Result<T, io::Error>>,
 {
     type Item = (usize, T);
     fn next(&mut self) -> Option<Self::Item> {
@@ -133,28 +200,23 @@ where
             match next_item {
                 Ok(item) => break Some((i, item)),
                 Err(e) => {
-                    self.errors.borrow_mut().push((i.to_string(), Box::new(e)));
+                    self.errors.borrow_mut().push(IndexedNDJSONError::new(
+                        i.to_string(),
+                        NDJSONError::IOError(e),
+                    ));
                 }
             }
         }
     }
 }
 
-pub trait IntoEnumeratedErrFiltered<E: 'static + Error, T>:
-    Iterator<Item = Result<T, E>> + Sized
-{
-    fn to_enumerated_err_filtered(
-        self,
-        errors: Rc<RefCell<Vec<IdErr>>>,
-    ) -> EnumeratedErrFiltered<Self> {
+pub trait IntoEnumeratedErrFiltered<E, T, W>: Iterator<Item = Result<T, W>> + Sized {
+    fn to_enumerated_err_filtered(self, errors: Errors<E>) -> EnumeratedErrFiltered<Self, E> {
         EnumeratedErrFiltered::new(self, errors)
     }
 }
 
-impl<E: 'static + Error, T, I: Iterator<Item = Result<T, E>>> IntoEnumeratedErrFiltered<E, T>
-    for I
-{
-}
+impl<E, T, I: Iterator<Item = Result<T, W>>, W> IntoEnumeratedErrFiltered<E, T, W> for I {}
 
 // TODO: extract stats to separate struct or add "file" id to *_lines
 #[derive(Debug, PartialEq, Eq, Default, Clone, Serialize, Deserialize)]
@@ -290,21 +352,10 @@ fn until_err<T, E>(err: &mut &mut Result<(), E>, item: Result<T, E>) -> Option<T
     }
 }
 
-#[derive(Debug, Clone)]
-struct EmptyQueryResultError;
-
-impl fmt::Display for EmptyQueryResultError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "query returned no results")
-    }
-}
-
-impl Error for EmptyQueryResultError {}
-
 pub fn expand_jsonpath_query<'a>(
     settings: &'a Settings,
     json_iter: impl Iterator<Item = IdJSON> + 'a,
-    errors: &Rc<RefCell<Vec<IdErr>>>,
+    errors: &NDJSONErrors,
 ) -> IdJSONIter<'a> {
     let select_errors = Rc::clone(errors);
     let missing = Rc::clone(errors);
@@ -315,16 +366,18 @@ pub fn expand_jsonpath_query<'a>(
         let expanded = json_iter.flat_map(move |(ref id, ref json)| {
             let mut select_errored = false;
             let selected = selector.select(json).unwrap_or_else(|e| {
-                select_errors
-                    .borrow_mut()
-                    .push((id.to_owned(), Box::new(e)));
+                select_errors.borrow_mut().push(IndexedNDJSONError::new(
+                    id.to_owned(),
+                    NDJSONError::QueryJsonPathError(e),
+                ));
                 select_errored = true;
                 vec![]
             });
             if selected.is_empty() && !select_errored {
-                missing
-                    .borrow_mut()
-                    .push((id.to_owned(), Box::new(EmptyQueryResultError)))
+                missing.borrow_mut().push(IndexedNDJSONError::new(
+                    id.to_owned(),
+                    NDJSONError::EmptyQuery,
+                ))
             }
             selected
                 .into_iter()
@@ -343,7 +396,7 @@ pub fn expand_jsonpath_query<'a>(
 pub fn apply_settings<'a>(
     settings: &'a Settings,
     json_iter: impl Iterator<Item = IdJSON> + 'a,
-    errors: &Rc<RefCell<Vec<IdErr>>>,
+    errors: &NDJSONErrors,
 ) -> IdJSONIter<'a> {
     let args = &settings.args;
 
@@ -354,7 +407,7 @@ pub fn apply_settings<'a>(
 pub fn process_json_iterable(
     settings: &Settings,
     json_iter: impl Iterator<Item = IdJSON>,
-    errors: &Rc<RefCell<Vec<IdErr>>>,
+    errors: &NDJSONErrors,
 ) -> FileStats {
     let mut fs = FileStats::new();
     let args = &settings.args;
