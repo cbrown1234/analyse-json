@@ -93,9 +93,8 @@ fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<
     let json_iter = parse_ndjson_file_path(&settings.args, file_path, &errors)?;
     let file_stats = process_json_iterable(settings, json_iter, &errors);
 
-    if !errors.container.borrow().is_empty() {
-        eprintln!("{errors}");
-    }
+    errors.eprint();
+
     Ok(file_stats)
 }
 
@@ -105,9 +104,7 @@ fn run_stdin(settings: Settings) -> Result<()> {
     let json_iter = parse_ndjson_bufreader(&settings.args, stdin, &errors)?;
     let stdin_file_stats = process_json_iterable(&settings, json_iter, &errors);
 
-    if !errors.container.borrow().is_empty() {
-        eprintln!("{errors}");
-    }
+    errors.eprint();
 
     stdin_file_stats.print()?;
     Ok(())

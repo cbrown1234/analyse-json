@@ -28,8 +28,8 @@ use std::{
 
 #[derive(Debug)]
 pub struct IndexedNDJSONError {
-    location: String,
-    error: NDJSONError,
+    pub location: String,
+    pub error: NDJSONError,
 }
 
 impl IndexedNDJSONError {
@@ -110,6 +110,15 @@ impl<E> Errors<E> {
 
     pub fn push(&self, value: E) {
         self.container.borrow_mut().push(value)
+    }
+}
+
+impl<E: Display> Errors<E> {
+    pub fn eprint(&self) {
+        let stream = Stream::Stdout;
+        if !self.container.borrow().is_empty() {
+            eprintln!("{}", self.if_supports_color(stream, |text| text.red()));
+        }
     }
 }
 
@@ -259,9 +268,9 @@ impl<E, T, I: Iterator<Item = Result<T, W>>, W> IntoEnumeratedErrFiltered<E, T, 
 pub struct FileStats {
     pub keys_count: IndexMap<String, usize>,
     pub line_count: usize,
-    pub bad_lines: Vec<usize>,
+    pub bad_lines: Vec<String>,
     pub keys_types_count: IndexMap<String, usize>,
-    pub empty_lines: Vec<usize>,
+    pub empty_lines: Vec<String>,
 }
 
 impl FileStats {
@@ -297,11 +306,11 @@ impl fmt::Display for FileStats {
         writeln!(f, "Key occurance counts:\n{:#?}", self.keys_count)?;
         writeln!(f, "Key occurance rate:")?;
         for (k, v) in self.key_occurance() {
-            writeln!(f, "{}: {}%", k, v)?;
+            writeln!(f, "{}: {:.3}%", k, v)?;
         }
         writeln!(f, "Key type occurance rate:")?;
         for (k, v) in self.key_type_occurance() {
-            writeln!(f, "{}: {}%", k, v)?;
+            writeln!(f, "{}: {:.3}%", k, v)?;
         }
         if !self.bad_lines.is_empty() {
             writeln!(
@@ -464,6 +473,17 @@ pub fn process_json_iterable(
             *counter += 1;
         }
     }
+
+    for indexed_error in errors.container.borrow().as_slice() {
+        let IndexedNDJSONError { location, error } = indexed_error;
+        let location = location.to_owned();
+        match error {
+            NDJSONError::JSONParsingError(_) => fs.bad_lines.push(location),
+            NDJSONError::EmptyQuery => fs.empty_lines.push(location),
+            NDJSONError::QueryJsonPathError(_) => fs.bad_lines.push(location),
+            NDJSONError::IOError(_) => fs.bad_lines.push(location),
+        }
+    }
     fs
 }
 
@@ -477,10 +497,10 @@ where
 {
     let keys_count: DashMap<String, usize> = DashMap::new();
     let keys_types_count: DashMap<String, usize> = DashMap::new();
-    let mut bad_lines: Vec<usize> = Vec::new();
+    let mut bad_lines: Vec<String> = Vec::new();
     let bad_lines_mutex = Mutex::new(&mut bad_lines);
     let line_count = AtomicUsize::new(0);
-    let mut empty_lines: Vec<usize> = Vec::new();
+    let mut empty_lines: Vec<String> = Vec::new();
     let empty_lines_mutex = Mutex::new(&mut empty_lines);
 
     let json_iter = parse_iter(args, json_iter);
@@ -498,7 +518,7 @@ where
             let line_num = i + 1;
             if j.is_err() {
                 let mut bad_lines = bad_lines_mutex.lock().unwrap();
-                bad_lines.push(line_num);
+                bad_lines.push(line_num.to_string());
             }
             line_count.fetch_max(line_num, Ordering::Release);
         })
@@ -516,7 +536,7 @@ where
                 } else {
                     let line_num = i + 1;
                     let mut empty_lines = empty_lines_mutex.lock().unwrap();
-                    empty_lines.push(line_num);
+                    empty_lines.push(line_num.to_string());
                     // continue; doesn't work in for_each
                     continue_ = true;
                 }
@@ -697,6 +717,33 @@ mod tests {
     }
 
     #[test]
+    fn bad_process_json_iterable_path_query() {
+        let json_iter_in: Vec<IdJSON> = vec![
+            (1.to_string(), json!({"key1": 123})),
+            (2.to_string(), json!({"key2": 123})),
+            (3.to_string(), json!({"key1": 123})),
+        ];
+        let json_iter_in = json_iter_in.iter().cloned();
+
+        let mut args = Cli::default();
+        args.jsonpath = Some("$.key1".to_string());
+        let settings = Settings::init(args).unwrap();
+        let errors = Errors::default();
+
+        let expected = FileStats {
+            keys_count: IndexMap::from([("$".to_string(), 2)]),
+            line_count: 2,
+            keys_types_count: IndexMap::from([("$::Number".to_string(), 2)]),
+            empty_lines: vec![2.to_string()],
+            ..Default::default()
+        };
+
+        let file_stats = process_json_iterable(&settings, json_iter_in, &errors);
+        assert_eq!(expected, file_stats);
+        assert!(errors.container.borrow().len() == 1)
+    }
+
+    #[test]
     fn simple_ndjson_iterable_par() {
         let iter: Vec<Result<String, std::io::Error>> = vec![
             Ok(r#"{"key1": 123}"#.to_string()),
@@ -733,7 +780,7 @@ mod tests {
             keys_count: IndexMap::from([("$.key2".to_string(), 1)]),
             line_count: 3,
             keys_types_count: IndexMap::from([("$.key2::Number".to_string(), 1)]),
-            empty_lines: vec![1, 3],
+            empty_lines: vec![1.to_string(), 3.to_string()],
             ..Default::default()
         };
 
