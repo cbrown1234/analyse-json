@@ -236,6 +236,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let (i, next_item) = self.iter.next()?;
+            let i = i + 1; // count lines from 1
             match next_item {
                 Ok(item) => break Some((i, item)),
                 Err(e) => {
@@ -615,9 +616,9 @@ mod tests {
         let reader = io::BufReader::new(tmpfile);
 
         let expected: Vec<IdJSON> = vec![
-            (0.to_string(), json!({"key1": 123})),
-            (1.to_string(), json!({"key2": 123})),
-            (2.to_string(), json!({"key1": 123})),
+            (1.to_string(), json!({"key1": 123})),
+            (2.to_string(), json!({"key2": 123})),
+            (3.to_string(), json!({"key1": 123})),
         ];
 
         let args = Cli::default();
@@ -638,8 +639,8 @@ mod tests {
         let reader = io::BufReader::new(tmpfile);
 
         let expected: Vec<IdJSON> = vec![
-            (0.to_string(), json!({"key1": 123})),
-            (2.to_string(), json!({"key1": 123})),
+            (1.to_string(), json!({"key1": 123})),
+            (3.to_string(), json!({"key1": 123})),
         ];
 
         let args = Cli::default();
@@ -653,9 +654,9 @@ mod tests {
     #[test]
     fn simple_expand_jsonpath_query() {
         let json_iter_in: Vec<IdJSON> = vec![
-            (0.to_string(), json!({"key1": [1, 2, 3]})),
-            (1.to_string(), json!({"key2": 123})),
-            (2.to_string(), json!({"key1": [4, 5]})),
+            (1.to_string(), json!({"key1": [1, 2, 3]})),
+            (2.to_string(), json!({"key2": 123})),
+            (3.to_string(), json!({"key1": [4, 5]})),
         ];
         let json_iter_in = json_iter_in.iter().cloned();
 
@@ -665,11 +666,11 @@ mod tests {
         let errors = Errors::default();
 
         let expected: Vec<IdJSON> = vec![
-            ("0:$.key1[*][0]".to_string(), json!(1)),
-            ("0:$.key1[*][1]".to_string(), json!(2)),
-            ("0:$.key1[*][2]".to_string(), json!(3)),
-            ("2:$.key1[*][0]".to_string(), json!(4)),
-            ("2:$.key1[*][1]".to_string(), json!(5)),
+            ("1:$.key1[*][0]".to_string(), json!(1)),
+            ("1:$.key1[*][1]".to_string(), json!(2)),
+            ("1:$.key1[*][2]".to_string(), json!(3)),
+            ("3:$.key1[*][0]".to_string(), json!(4)),
+            ("3:$.key1[*][1]".to_string(), json!(5)),
         ];
 
         let json_iter = expand_jsonpath_query(&settings, json_iter_in, &errors);
@@ -680,9 +681,9 @@ mod tests {
     #[test]
     fn simple_process_json_iterable() {
         let json_iter_in: Vec<IdJSON> = vec![
-            (0.to_string(), json!({"key1": 123})),
-            (1.to_string(), json!({"key2": 123})),
-            (2.to_string(), json!({"key1": 123})),
+            (1.to_string(), json!({"key1": 123})),
+            (2.to_string(), json!({"key2": 123})),
+            (3.to_string(), json!({"key1": 123})),
         ];
         let json_iter_in = json_iter_in.iter().cloned();
 

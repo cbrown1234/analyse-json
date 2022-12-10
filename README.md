@@ -49,6 +49,6 @@ cargo install analyse-json
 * ~~Refactor to implementation using iterator adapters~~ (First pass done, need some improvement)
   * consider itertools::process_results as a top level runner
 * Check for existance (and type) of particular jsonpath
-* Enumerate lines from 1 rather than 0 (Maybe part of larger json wrapper struct refactor)
+* ~~Enumerate lines from 1 rather than 0 (Maybe part of larger json wrapper struct refactor)~~
 * ~~Refactor ndjson to use error wrappers with location info rather than tuples~~
 * Integrate graceful iterator adapter error handling (`Rc<RefCell<Vec<_>>>`) into filestats
