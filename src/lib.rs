@@ -4,14 +4,13 @@ use flate2::read::GzDecoder;
 use glob::glob;
 use grep_cli::is_readable_stdin;
 use humantime::format_duration;
+use json::ndjson::Errors;
 use jsonpath_lib::Compiled;
-use std::cell::RefCell;
 use std::error;
 use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::time::Instant;
 
 use crate::json::ndjson::{
@@ -89,25 +88,25 @@ fn get_bufreader(_args: &Cli, file_path: &std::path::PathBuf) -> Result<Box<dyn 
 }
 
 fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<FileStats> {
-    let errors = Rc::new(RefCell::new(vec![]));
+    let errors = Errors::default();
 
     let json_iter = parse_ndjson_file_path(&settings.args, file_path, &errors)?;
     let file_stats = process_json_iterable(settings, json_iter, &errors);
 
-    if !errors.borrow().is_empty() {
-        eprintln!("{errors:#?}");
+    if !errors.container.borrow().is_empty() {
+        eprintln!("{errors}");
     }
     Ok(file_stats)
 }
 
 fn run_stdin(settings: Settings) -> Result<()> {
     let stdin = io::stdin().lock();
-    let errors = Rc::new(RefCell::new(vec![]));
+    let errors = Errors::default();
     let json_iter = parse_ndjson_bufreader(&settings.args, stdin, &errors)?;
     let stdin_file_stats = process_json_iterable(&settings, json_iter, &errors);
 
-    if !errors.borrow().is_empty() {
-        eprintln!("{errors:#?}");
+    if !errors.container.borrow().is_empty() {
+        eprintln!("{errors}");
     }
 
     stdin_file_stats.print()?;

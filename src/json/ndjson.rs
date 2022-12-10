@@ -13,6 +13,7 @@ use serde::{Deserialize, Serialize};
 pub use serde_json::Value;
 use std::cell::RefCell;
 use std::error::{self, Error};
+use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::iter::{Enumerate, Sum};
 use std::ops::Add;
@@ -39,7 +40,11 @@ impl IndexedNDJSONError {
 
 impl fmt::Display for IndexedNDJSONError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{} {}", self.location, self.error)
+        write!(f, "Line {}: {}", self.location, self.error)?;
+        if let Some(source) = self.error.source() {
+            write!(f, "; {source}")?;
+        }
+        Ok(())
     }
 }
 
@@ -92,9 +97,40 @@ impl From<serde_json::Error> for NDJSONError {
     }
 }
 
+#[derive(Debug)]
+pub struct Errors<E> {
+    pub container: Rc<RefCell<Vec<E>>>,
+}
+
+impl<E> Errors<E> {
+    pub fn new(container: Rc<RefCell<Vec<E>>>) -> Self {
+        Self { container }
+    }
+
+    fn clone(&self) -> Self {
+        Self {
+            container: Rc::clone(&self.container),
+        }
+    }
+}
+
+impl<E> Default for Errors<E> {
+    fn default() -> Self {
+        Self::new(Rc::new(RefCell::new(vec![])))
+    }
+}
+
+impl<E: Display> fmt::Display for Errors<E> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for i in self.container.borrow().as_slice() {
+            write!(f, "{i}")?;
+        }
+        Ok(())
+    }
+}
+
 type IdJSON = (String, Value);
 type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
-type Errors<E> = Rc<RefCell<Vec<E>>>;
 type NDJSONErrors = Errors<IndexedNDJSONError>;
 
 pub fn parse_ndjson_bufreader<'a>(
@@ -104,7 +140,7 @@ pub fn parse_ndjson_bufreader<'a>(
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
     let json_iter = reader.lines();
 
-    let json_iter = json_iter.to_enumerated_err_filtered(Rc::clone(errors));
+    let json_iter = json_iter.to_enumerated_err_filtered(errors.clone());
 
     let json_iter = json_iter.map(|(i, json_candidate)| {
         (
@@ -112,7 +148,7 @@ pub fn parse_ndjson_bufreader<'a>(
             serde_json::from_str::<Value>(&json_candidate),
         )
     });
-    let json_iter = json_iter.to_err_filtered(Rc::clone(errors));
+    let json_iter = json_iter.to_err_filtered(errors.clone());
 
     Ok(Box::new(json_iter))
 }
@@ -157,10 +193,13 @@ where
             match next_item {
                 Ok(item) => break Some((id, item)),
                 Err(e) => {
-                    self.errors.borrow_mut().push(IndexedNDJSONError::new(
-                        id,
-                        NDJSONError::JSONParsingError(e),
-                    ));
+                    self.errors
+                        .container
+                        .borrow_mut()
+                        .push(IndexedNDJSONError::new(
+                            id,
+                            NDJSONError::JSONParsingError(e),
+                        ));
                 }
             }
         }
@@ -200,10 +239,13 @@ where
             match next_item {
                 Ok(item) => break Some((i, item)),
                 Err(e) => {
-                    self.errors.borrow_mut().push(IndexedNDJSONError::new(
-                        i.to_string(),
-                        NDJSONError::IOError(e),
-                    ));
+                    self.errors
+                        .container
+                        .borrow_mut()
+                        .push(IndexedNDJSONError::new(
+                            i.to_string(),
+                            NDJSONError::IOError(e),
+                        ));
                 }
             }
         }
@@ -357,8 +399,8 @@ pub fn expand_jsonpath_query<'a>(
     json_iter: impl Iterator<Item = IdJSON> + 'a,
     errors: &NDJSONErrors,
 ) -> IdJSONIter<'a> {
-    let select_errors = Rc::clone(errors);
-    let missing = Rc::clone(errors);
+    let select_errors = errors.clone();
+    let missing = errors.clone();
     let json_iter_out: IdJSONIter<'a>;
     if let Some(ref selector) = settings.jsonpath_selector {
         let path = settings.args.jsonpath.to_owned();
@@ -366,15 +408,18 @@ pub fn expand_jsonpath_query<'a>(
         let expanded = json_iter.flat_map(move |(ref id, ref json)| {
             let mut select_errored = false;
             let selected = selector.select(json).unwrap_or_else(|e| {
-                select_errors.borrow_mut().push(IndexedNDJSONError::new(
-                    id.to_owned(),
-                    NDJSONError::QueryJsonPathError(e),
-                ));
+                select_errors
+                    .container
+                    .borrow_mut()
+                    .push(IndexedNDJSONError::new(
+                        id.to_owned(),
+                        NDJSONError::QueryJsonPathError(e),
+                    ));
                 select_errored = true;
                 vec![]
             });
             if selected.is_empty() && !select_errored {
-                missing.borrow_mut().push(IndexedNDJSONError::new(
+                missing.container.borrow_mut().push(IndexedNDJSONError::new(
                     id.to_owned(),
                     NDJSONError::EmptyQuery,
                 ))
@@ -576,11 +621,11 @@ mod tests {
         ];
 
         let args = Cli::default();
-        let errors = Rc::new(RefCell::new(vec![]));
+        let errors = Errors::default();
 
         let json_iter = parse_ndjson_bufreader(&args, reader, &errors).unwrap();
         assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
-        assert!(errors.borrow().is_empty())
+        assert!(errors.container.borrow().is_empty())
     }
 
     #[test]
@@ -598,11 +643,11 @@ mod tests {
         ];
 
         let args = Cli::default();
-        let errors = Rc::new(RefCell::new(vec![]));
+        let errors = Errors::default();
 
         let json_iter = parse_ndjson_bufreader(&args, reader, &errors).unwrap();
         assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
-        assert!(errors.borrow().len() == 1)
+        assert!(errors.container.borrow().len() == 1)
     }
 
     #[test]
@@ -617,7 +662,7 @@ mod tests {
         let mut args = Cli::default();
         args.jsonpath = Some("$.key1[*]".to_string());
         let settings = Settings::init(args).unwrap();
-        let errors = Rc::new(RefCell::new(vec![]));
+        let errors = Errors::default();
 
         let expected: Vec<IdJSON> = vec![
             ("0:$.key1[*][0]".to_string(), json!(1)),
@@ -629,7 +674,7 @@ mod tests {
 
         let json_iter = expand_jsonpath_query(&settings, json_iter_in, &errors);
         assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
-        assert!(errors.borrow().len() == 1)
+        assert!(errors.container.borrow().len() == 1)
     }
 
     #[test]
@@ -643,7 +688,7 @@ mod tests {
 
         let args = Cli::default();
         let settings = Settings::init(args).unwrap();
-        let errors = Rc::new(RefCell::new(vec![]));
+        let errors = Errors::default();
 
         let expected = FileStats {
             keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
@@ -657,7 +702,7 @@ mod tests {
 
         let file_stats = process_json_iterable(&settings, json_iter_in, &errors);
         assert_eq!(expected, file_stats);
-        assert!(errors.borrow().is_empty())
+        assert!(errors.container.borrow().is_empty())
     }
 
     #[test]
