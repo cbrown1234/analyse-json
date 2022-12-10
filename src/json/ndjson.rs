@@ -61,8 +61,6 @@ impl fmt::Display for NDJSONError {
         match self {
             NDJSONError::IOError(_e) => write!(f, "line failed due to an IO error"),
             NDJSONError::JSONParsingError(_e) => write!(f, "line failed to parse as valid JSON"),
-            // The wrapped error contains additional information and is available
-            // via the source() method.
             NDJSONError::EmptyQuery => write!(f, "line returned empty for ther given query"),
             NDJSONError::QueryJsonPathError(_e) => {
                 write!(f, "line failed due to a JsonPath Query error")
@@ -76,9 +74,6 @@ impl error::Error for NDJSONError {
         match *self {
             NDJSONError::IOError(ref e) => Some(e),
             NDJSONError::JSONParsingError(ref e) => Some(e),
-            // The cause is the underlying implementation error type. Is implicitly
-            // cast to the trait object `&error::Error`. This works because the
-            // underlying type already implements the `Error` trait.
             NDJSONError::EmptyQuery => None,
             NDJSONError::QueryJsonPathError(ref e) => Some(e),
         }
@@ -107,10 +102,14 @@ impl<E> Errors<E> {
         Self { container }
     }
 
-    fn clone(&self) -> Self {
+    pub fn new_ref(&self) -> Self {
         Self {
             container: Rc::clone(&self.container),
         }
+    }
+
+    pub fn push(&self, value: E) {
+        self.container.borrow_mut().push(value)
     }
 }
 
@@ -140,7 +139,7 @@ pub fn parse_ndjson_bufreader<'a>(
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
     let json_iter = reader.lines();
 
-    let json_iter = json_iter.to_enumerated_err_filtered(errors.clone());
+    let json_iter = json_iter.to_enumerated_err_filtered(errors.new_ref());
 
     let json_iter = json_iter.map(|(i, json_candidate)| {
         (
@@ -148,7 +147,7 @@ pub fn parse_ndjson_bufreader<'a>(
             serde_json::from_str::<Value>(&json_candidate),
         )
     });
-    let json_iter = json_iter.to_err_filtered(errors.clone());
+    let json_iter = json_iter.to_err_filtered(errors.new_ref());
 
     Ok(Box::new(json_iter))
 }
@@ -193,13 +192,10 @@ where
             match next_item {
                 Ok(item) => break Some((id, item)),
                 Err(e) => {
-                    self.errors
-                        .container
-                        .borrow_mut()
-                        .push(IndexedNDJSONError::new(
-                            id,
-                            NDJSONError::JSONParsingError(e),
-                        ));
+                    self.errors.push(IndexedNDJSONError::new(
+                        id,
+                        NDJSONError::JSONParsingError(e),
+                    ));
                 }
             }
         }
@@ -240,13 +236,10 @@ where
             match next_item {
                 Ok(item) => break Some((i, item)),
                 Err(e) => {
-                    self.errors
-                        .container
-                        .borrow_mut()
-                        .push(IndexedNDJSONError::new(
-                            i.to_string(),
-                            NDJSONError::IOError(e),
-                        ));
+                    self.errors.push(IndexedNDJSONError::new(
+                        i.to_string(),
+                        NDJSONError::IOError(e),
+                    ));
                 }
             }
         }
@@ -400,8 +393,8 @@ pub fn expand_jsonpath_query<'a>(
     json_iter: impl Iterator<Item = IdJSON> + 'a,
     errors: &NDJSONErrors,
 ) -> IdJSONIter<'a> {
-    let select_errors = errors.clone();
-    let missing = errors.clone();
+    let select_errors = errors.new_ref();
+    let missing = errors.new_ref();
     let json_iter_out: IdJSONIter<'a>;
     if let Some(ref selector) = settings.jsonpath_selector {
         let path = settings.args.jsonpath.to_owned();
@@ -409,18 +402,15 @@ pub fn expand_jsonpath_query<'a>(
         let expanded = json_iter.flat_map(move |(ref id, ref json)| {
             let mut select_errored = false;
             let selected = selector.select(json).unwrap_or_else(|e| {
-                select_errors
-                    .container
-                    .borrow_mut()
-                    .push(IndexedNDJSONError::new(
-                        id.to_owned(),
-                        NDJSONError::QueryJsonPathError(e),
-                    ));
+                select_errors.push(IndexedNDJSONError::new(
+                    id.to_owned(),
+                    NDJSONError::QueryJsonPathError(e),
+                ));
                 select_errored = true;
                 vec![]
             });
             if selected.is_empty() && !select_errored {
-                missing.container.borrow_mut().push(IndexedNDJSONError::new(
+                missing.push(IndexedNDJSONError::new(
                     id.to_owned(),
                     NDJSONError::EmptyQuery,
                 ))
