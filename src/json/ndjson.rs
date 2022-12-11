@@ -20,6 +20,7 @@ use std::ops::Add;
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::mpsc::Receiver;
 use std::sync::Mutex;
 use std::{
     fmt,
@@ -139,7 +140,46 @@ impl<E: Display> fmt::Display for Errors<E> {
 
 type IdJSON = (String, Value);
 type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
+// type IdJSONIterPar<'a> = Box<dyn ParallelIterator<Item = IdJSON> +'a>;
 type NDJSONErrors = Errors<IndexedNDJSONError>;
+
+pub fn parse_ndjson_receiver<'a>(
+    _args: &Cli,
+    receiver: &'a Receiver<String>,
+    errors: &NDJSONErrors,
+) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
+    let json_iter = receiver.iter();
+
+    let json_iter = json_iter.enumerate().map(|(i, json_candidate)| {
+        (
+            (i + 1).to_string(),
+            serde_json::from_str::<Value>(&json_candidate),
+        )
+    });
+    let json_iter = json_iter.to_err_filtered(errors.new_ref());
+
+    Ok(Box::new(json_iter))
+}
+
+// https://github.com/rayon-rs/rayon/issues/628
+// https://users.rust-lang.org/t/how-to-wrap-a-non-object-safe-trait-in-an-object-safe-one/33904
+// pub fn parse_ndjson_receiver_par<'a>(
+//     _args: &Cli,
+//     receiver: &'a mut Receiver<String>,
+//     errors: &NDJSONErrors,
+// ) -> Result<IdJSONIterPar<'a>, Box<dyn Error>> {
+//     let json_iter = receiver.into_iter();
+
+//     let json_iter = json_iter.enumerate().par_bridge().map(|(i, json_candidate)| {
+//         (
+//             (i+1).to_string(),
+//             serde_json::from_str::<Value>(&json_candidate),
+//         )
+//     });
+//     let json_iter = json_iter.to_err_filtered(errors.new_ref());
+
+//     Ok(Box::new(json_iter))
+// }
 
 pub fn parse_ndjson_bufreader<'a>(
     _args: &Cli,
