@@ -21,7 +21,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::{
     fmt,
     io::{self, prelude::*},
@@ -94,6 +94,27 @@ impl From<serde_json::Error> for NDJSONError {
 }
 
 #[derive(Debug)]
+pub struct ErrorsPar<E> {
+    pub container: Arc<Mutex<Vec<E>>>,
+}
+
+impl<E> ErrorsPar<E> {
+    pub fn new(container: Arc<Mutex<Vec<E>>>) -> Self {
+        Self { container }
+    }
+
+    pub fn new_ref(&self) -> Self {
+        Self {
+            container: Arc::clone(&self.container),
+        }
+    }
+
+    pub fn push(&self, value: E) {
+        self.container.lock().expect("not poisioned").push(value)
+    }
+}
+
+#[derive(Debug)]
 pub struct Errors<E> {
     pub container: Rc<RefCell<Vec<E>>>,
 }
@@ -138,10 +159,11 @@ impl<E: Display> fmt::Display for Errors<E> {
     }
 }
 
+type IJSONCandidate = (usize, String);
 type IdJSON = (String, Value);
 type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
-// type IdJSONIterPar<'a> = Box<dyn ParallelIterator<Item = IdJSON> +'a>;
 type NDJSONErrors = Errors<IndexedNDJSONError>;
+type NDJSONErrorsPar = ErrorsPar<IndexedNDJSONError>;
 
 pub fn parse_ndjson_receiver<'a>(
     _args: &Cli,
@@ -161,25 +183,68 @@ pub fn parse_ndjson_receiver<'a>(
     Ok(Box::new(json_iter))
 }
 
+pub fn parse_ndjson_receiver_par<'a>(
+    args: &Cli,
+    receiver: Receiver<IJSONCandidate>,
+    errors: &'a NDJSONErrorsPar,
+) -> impl ParallelIterator<Item = IdJSON> + 'a {
+    parse_ndjson_iter_par(args, receiver.into_iter(), errors)
+}
+
+pub fn parse_ndjson_bufreader_par<'a>(
+    args: &Cli,
+    file_path: &PathBuf,
+    errors: &'a NDJSONErrorsPar,
+) -> Result<impl ParallelIterator<Item = IdJSON> + 'a, Box<dyn Error>> {
+    let reader = get_bufreader(args, file_path)?;
+
+    let iter = reader.lines().enumerate();
+    let iter = iter.filter_map(|(i, line)| {
+        let i = i + 1; // count lines from 1
+        let io_errors = errors.new_ref();
+        match line {
+            Err(e) => {
+                io_errors.push(IndexedNDJSONError {
+                    location: i.to_string(),
+                    error: NDJSONError::IOError(e),
+                });
+                None
+            }
+            Ok(json) => Some((i, json)),
+        }
+    });
+
+    Ok(parse_ndjson_iter_par(args, iter, errors))
+}
+
 // https://github.com/rayon-rs/rayon/issues/628
 // https://users.rust-lang.org/t/how-to-wrap-a-non-object-safe-trait-in-an-object-safe-one/33904
-// pub fn parse_ndjson_receiver_par<'a>(
-//     _args: &Cli,
-//     receiver: &'a mut Receiver<String>,
-//     errors: &NDJSONErrors,
-// ) -> Result<IdJSONIterPar<'a>, Box<dyn Error>> {
-//     let json_iter = receiver.into_iter();
+pub fn parse_ndjson_iter_par<'a>(
+    _args: &Cli,
+    iter: impl Iterator<Item = IJSONCandidate> + Send + 'a,
+    errors: &'a NDJSONErrorsPar,
+) -> impl ParallelIterator<Item = IdJSON> + 'a {
+    let json_iter = iter.par_bridge().map(|(i, json_candidate)| {
+        (
+            i.to_string(),
+            serde_json::from_str::<Value>(&json_candidate),
+        )
+    });
 
-//     let json_iter = json_iter.enumerate().par_bridge().map(|(i, json_candidate)| {
-//         (
-//             (i+1).to_string(),
-//             serde_json::from_str::<Value>(&json_candidate),
-//         )
-//     });
-//     let json_iter = json_iter.to_err_filtered(errors.new_ref());
-
-//     Ok(Box::new(json_iter))
-// }
+    json_iter.filter_map(|(id, json)| {
+        let json_parse_errors = errors.new_ref();
+        match json {
+            Err(e) => {
+                json_parse_errors.push(IndexedNDJSONError {
+                    location: id,
+                    error: NDJSONError::JSONParsingError(e),
+                });
+                None
+            }
+            Ok(json) => Some((id, json)),
+        }
+    })
+}
 
 pub fn parse_ndjson_bufreader<'a>(
     _args: &Cli,
