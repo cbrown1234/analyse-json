@@ -592,6 +592,62 @@ pub fn process_json_iterable(
     fs
 }
 
+pub fn process_json_iterable_par<'a>(
+    settings: &Settings,
+    json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
+    errors: &'a NDJSONErrorsPar,
+) -> FileStats {
+    let mut fs = FileStats::new();
+    let args = &settings.args;
+
+    let keys_count: DashMap<String, usize> = DashMap::new();
+    let keys_types_count: DashMap<String, usize> = DashMap::new();
+    let line_count = AtomicUsize::new(0);
+
+    // let json_iter = json_iter.take(); TODO?
+
+    // let json_iter = apply_settings(settings, json_iter, errors);
+
+    json_iter.for_each(|(_id, json)| {
+        line_count.fetch_add(1, Ordering::Release);
+
+        for value_path in json.value_paths(args.explode_arrays) {
+            let path = value_path.jsonpath();
+            let mut counter = keys_count.entry(path.to_owned()).or_insert(0);
+            *counter.value_mut() += 1;
+
+            let type_ = value_path.value.value_type();
+            let path_type = format!("{}::{}", path, type_);
+            let mut counter = keys_types_count.entry(path_type).or_insert(0);
+            *counter.value_mut() += 1;
+        }
+    });
+
+    for indexed_error in errors.container.lock().unwrap().as_slice() {
+        let IndexedNDJSONError { location, error } = indexed_error;
+        let location = location.to_owned();
+        match error {
+            NDJSONError::JSONParsingError(_) => fs.bad_lines.push(location),
+            NDJSONError::EmptyQuery => fs.empty_lines.push(location),
+            NDJSONError::QueryJsonPathError(_) => fs.bad_lines.push(location),
+            NDJSONError::IOError(_) => fs.bad_lines.push(location),
+        }
+    }
+
+    fs.keys_count = keys_count
+        .into_read_only()
+        .iter()
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect();
+    fs.line_count = line_count.load(Ordering::Acquire);
+    fs.keys_types_count = keys_types_count
+        .into_read_only()
+        .iter()
+        .map(|(k, v)| (k.to_owned(), v.to_owned()))
+        .collect();
+    fs
+}
+
 #[deprecated]
 pub fn parse_json_iterable_par<E>(
     args: &Cli,
