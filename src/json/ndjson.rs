@@ -220,10 +220,12 @@ pub fn parse_ndjson_bufreader_par<'a>(
 // https://github.com/rayon-rs/rayon/issues/628
 // https://users.rust-lang.org/t/how-to-wrap-a-non-object-safe-trait-in-an-object-safe-one/33904
 pub fn parse_ndjson_iter_par<'a>(
-    _args: &Cli,
+    args: &Cli,
     iter: impl Iterator<Item = IJSONCandidate> + Send + 'a,
     errors: &'a NDJSONErrorsPar,
 ) -> impl ParallelIterator<Item = IdJSON> + 'a {
+    let iter = iter.take(args.lines.unwrap_or(usize::MAX));
+
     let json_iter = iter.par_bridge().map(|(i, json_candidate)| {
         (
             i.to_string(),
@@ -543,6 +545,46 @@ pub fn expand_jsonpath_query<'a>(
     json_iter_out
 }
 
+pub fn expand_jsonpath_query_par<'a>(
+    settings: &'a Settings,
+    json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
+    errors: &NDJSONErrorsPar,
+) -> impl ParallelIterator<Item = IdJSON> + 'a {
+    let select_errors = errors.new_ref();
+    let missing = errors.new_ref();
+
+    json_iter.flat_map(move |(id, json)| {
+        if let Some(ref selector) = settings.jsonpath_selector {
+            let path = settings.args.jsonpath.to_owned();
+            let path = path.expect("must exist for jsonpath_selector to exist");
+
+            let mut select_errored = false;
+            let selected = selector.select(&json).unwrap_or_else(|e| {
+                select_errors.push(IndexedNDJSONError::new(
+                    id.to_owned(),
+                    NDJSONError::QueryJsonPathError(e),
+                ));
+                select_errored = true;
+                vec![]
+            });
+            if selected.is_empty() && !select_errored {
+                missing.push(IndexedNDJSONError::new(
+                    id.to_owned(),
+                    NDJSONError::EmptyQuery,
+                ))
+            }
+            selected
+                .into_iter()
+                .map(|json| (format!("{id}:{path}"), json.to_owned()))
+                .enumerate()
+                .map(|(i, (id, json))| (format!("{id}[{i}]"), json))
+                .collect::<Vec<_>>()
+        } else {
+            vec![(id, json)]
+        }
+    })
+}
+
 pub fn apply_settings<'a>(
     settings: &'a Settings,
     json_iter: impl Iterator<Item = IdJSON> + 'a,
@@ -552,6 +594,17 @@ pub fn apply_settings<'a>(
 
     let json_iter = limit(args, json_iter);
     expand_jsonpath_query(settings, json_iter, errors)
+}
+
+pub fn apply_settings_par<'a>(
+    settings: &'a Settings,
+    json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
+    errors: &NDJSONErrorsPar,
+) -> impl ParallelIterator<Item = IdJSON> + 'a {
+    // let args = &settings.args;
+
+    // let json_iter = limit(args, json_iter);
+    expand_jsonpath_query_par(settings, json_iter, errors)
 }
 
 pub fn process_json_iterable(
@@ -604,9 +657,7 @@ pub fn process_json_iterable_par<'a>(
     let keys_types_count: DashMap<String, usize> = DashMap::new();
     let line_count = AtomicUsize::new(0);
 
-    // let json_iter = json_iter.take(); TODO?
-
-    // let json_iter = apply_settings(settings, json_iter, errors);
+    let json_iter = apply_settings_par(settings, json_iter, errors);
 
     json_iter.for_each(|(_id, json)| {
         line_count.fetch_add(1, Ordering::Release);
