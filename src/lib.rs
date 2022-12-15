@@ -56,6 +56,10 @@ pub struct Cli {
     /// Use parallel version of the processing
     #[clap(long)]
     parallel: bool,
+
+    /// Silence error logging
+    #[clap(long)]
+    quiet: bool,
 }
 
 impl Cli {
@@ -102,7 +106,9 @@ fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<
     let json_iter = parse_ndjson_file_path(&settings.args, file_path, &errors)?;
     let file_stats = process_json_iterable(settings, json_iter, &errors);
 
-    errors.eprint();
+    if !settings.args.quiet {
+        errors.eprint();
+    }
 
     Ok(file_stats)
 }
@@ -113,7 +119,9 @@ fn process_ndjson_file_path_par(settings: &Settings, file_path: &PathBuf) -> Res
     let json_iter = parse_ndjson_bufreader_par(&settings.args, file_path, &errors)?;
     let file_stats = process_json_iterable_par(settings, json_iter, &errors);
 
-    errors.eprint();
+    if !settings.args.quiet {
+        errors.eprint();
+    }
 
     Ok(file_stats)
 }
@@ -124,7 +132,9 @@ fn run_stdin(settings: Settings) -> Result<()> {
     let json_iter = parse_ndjson_bufreader(&settings.args, stdin, &errors)?;
     let stdin_file_stats = process_json_iterable(&settings, json_iter, &errors);
 
-    errors.eprint();
+    if !settings.args.quiet {
+        errors.eprint();
+    }
 
     stdin_file_stats.print()?;
     Ok(())
@@ -136,7 +146,9 @@ fn run_stdin_par(settings: Settings) -> Result<()> {
     let json_iter = parse_ndjson_receiver_par(&settings.args, stdin, &errors);
     let stdin_file_stats = process_json_iterable_par(&settings, json_iter, &errors);
 
-    errors.eprint();
+    if !settings.args.quiet {
+        errors.eprint();
+    }
 
     stdin_file_stats.print()?;
     Ok(())
