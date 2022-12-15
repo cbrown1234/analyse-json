@@ -30,7 +30,7 @@ type Result<T> = ::std::result::Result<T, Box<dyn error::Error>>;
 #[clap(author, version, about, long_about = None)]
 pub struct Cli {
     /// File to process, expected to contain a single JSON object or Newline Delimited (ND) JSON objects
-    #[clap(parse(from_os_str))]
+    #[clap(value_parser)]
     file_path: Option<std::path::PathBuf>,
 
     /// Process all files identified by this glob pattern
@@ -240,4 +240,10 @@ pub fn run(args: Cli) -> Result<()> {
     }
     eprintln!("Completed in {}", format_duration(now.elapsed()));
     Ok(())
+}
+
+#[test]
+fn verify_cli() {
+    use clap::CommandFactory;
+    Cli::command().debug_assert()
 }
