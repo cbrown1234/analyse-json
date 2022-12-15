@@ -550,9 +550,8 @@ pub fn expand_jsonpath_query<'a>(
             }
             selected
                 .into_iter()
-                .map(|json| (format!("{id}:{path}"), json.to_owned()))
                 .enumerate()
-                .map(|(i, (id, json))| (format!("{id}[{i}]"), json))
+                .map(|(i, json)| (format!("{id}:{path}[{i}]"), json.to_owned()))
                 .collect::<Vec<_>>()
         });
         json_iter_out = Box::new(expanded);
@@ -592,9 +591,8 @@ pub fn expand_jsonpath_query_par<'a>(
             }
             selected
                 .into_iter()
-                .map(|json| (format!("{id}:{path}"), json.to_owned()))
                 .enumerate()
-                .map(|(i, (id, json))| (format!("{id}[{i}]"), json))
+                .map(|(i, json)| (format!("{id}:{path}[{i}]"), json.to_owned()))
                 .collect::<Vec<_>>()
         } else {
             vec![(id, json)]
