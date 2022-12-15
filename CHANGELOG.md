@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+## [0.4.0] - 2022-12-15
+
 ### Added
 - `--parallel` flag to toggle on parallel processing
 - Full support for multiple return values from `--jsonpath` query
@@ -53,7 +55,8 @@ All notable changes to this project will be documented in this file.
 Initial Release
 
 <!-- next-url -->
-[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/cbrown1234/analyse-json/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/cbrown1234/analyse-json/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/cbrown1234/analyse-json/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/cbrown1234/analyse-json/releases/tag/v0.1.0
