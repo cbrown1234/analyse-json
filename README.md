@@ -51,4 +51,4 @@ cargo install analyse-json
 * Check for existance (and type) of particular jsonpath
 * ~~Enumerate lines from 1 rather than 0 (Maybe part of larger json wrapper struct refactor)~~
 * ~~Refactor ndjson to use error wrappers with location info rather than tuples~~
-* Integrate graceful iterator adapter error handling (`Rc<RefCell<Vec<_>>>`) into filestats
+* ~~Integrate graceful iterator adapter error handling (`Rc<RefCell<Vec<_>>>`) into filestats~~
