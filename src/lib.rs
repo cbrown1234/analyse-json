@@ -58,7 +58,7 @@ pub struct Cli {
     parallel: bool,
 
     /// Silence error logging
-    #[clap(long)]
+    #[clap(short, long)]
     quiet: bool,
 }
 
