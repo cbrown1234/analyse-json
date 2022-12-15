@@ -7,7 +7,8 @@ USAGE:
     analyse-json [OPTIONS] [FILE_PATH]
 
 ARGS:
-    <FILE_PATH>
+    <FILE_PATH>    File to process, expected to contain a single JSON object or Newline
+                   Delimited (ND) JSON objects
 
 OPTIONS:
         --explode-arrays         Walk the elements of arrays?
@@ -16,6 +17,8 @@ OPTIONS:
         --jsonpath <JSONPATH>    JSONpath query to filter/limit the inspection to
         --merge                  Include combined results for all files when using glob
     -n, --lines <LINES>          Limit inspection to the first n lines
+        --parallel               Use parallel version of the processing
+    -q, --quiet                  Silence error logging
     -V, --version                Print version information
 ```
 
