@@ -616,9 +616,6 @@ pub fn apply_settings_par<'a>(
     json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
     errors: &NDJSONErrorsPar,
 ) -> impl ParallelIterator<Item = IdJSON> + 'a {
-    // let args = &settings.args;
-
-    // let json_iter = limit(args, json_iter);
     expand_jsonpath_query_par(settings, json_iter, errors)
 }
 
