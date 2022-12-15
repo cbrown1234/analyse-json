@@ -32,6 +32,10 @@ https://doc.rust-lang.org/cargo/getting-started/installation.html
 cargo install analyse-json
 ```
 
+## Changelog
+
+[Changelog is available on github](https://github.com/cbrown1234/analyse-json/blob/master/CHANGELOG.md)
+
 ## Features TODO:
 * ~~Add multi-file handling (dir/glob)~~
 * ~~Add JSON path search~~ (Can be improved though)
