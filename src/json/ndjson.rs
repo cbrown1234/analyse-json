@@ -114,6 +114,30 @@ impl<E> ErrorsPar<E> {
     }
 }
 
+impl<E> Default for ErrorsPar<E> {
+    fn default() -> Self {
+        Self::new(Arc::new(Mutex::new(vec![])))
+    }
+}
+
+impl<E: Display> fmt::Display for ErrorsPar<E> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for i in self.container.lock().unwrap().as_slice() {
+            writeln!(f, "{i}")?;
+        }
+        Ok(())
+    }
+}
+
+impl<E: Display> ErrorsPar<E> {
+    pub fn eprint(&self) {
+        let stream = Stream::Stdout;
+        if !self.container.lock().unwrap().is_empty() {
+            eprintln!("{}", self.if_supports_color(stream, |text| text.red()));
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Errors<E> {
     pub container: Rc<RefCell<Vec<E>>>,
@@ -153,7 +177,7 @@ impl<E> Default for Errors<E> {
 impl<E: Display> fmt::Display for Errors<E> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for i in self.container.borrow().as_slice() {
-            write!(f, "{i}")?;
+            writeln!(f, "{i}")?;
         }
         Ok(())
     }
@@ -185,10 +209,14 @@ pub fn parse_ndjson_receiver<'a>(
 
 pub fn parse_ndjson_receiver_par<'a>(
     args: &Cli,
-    receiver: Receiver<IJSONCandidate>,
+    receiver: Receiver<String>,
     errors: &'a NDJSONErrorsPar,
 ) -> impl ParallelIterator<Item = IdJSON> + 'a {
-    parse_ndjson_iter_par(args, receiver.into_iter(), errors)
+    let receiver = receiver
+        .into_iter()
+        .enumerate()
+        .map(|(i, json_candidate)| (i + 1, json_candidate));
+    parse_ndjson_iter_par(args, receiver, errors)
 }
 
 pub fn parse_ndjson_bufreader_par<'a>(
@@ -493,17 +521,6 @@ impl<'a> Sum<&'a Self> for FileStats {
     }
 }
 
-// https://stackoverflow.com/questions/26368288/how-do-i-stop-iteration-and-return-an-error-when-iteratormap-returns-a-result
-fn until_err<T, E>(err: &mut &mut Result<(), E>, item: Result<T, E>) -> Option<T> {
-    match item {
-        Ok(item) => Some(item),
-        Err(e) => {
-            **err = Err(e);
-            None
-        }
-    }
-}
-
 pub fn expand_jsonpath_query<'a>(
     settings: &'a Settings,
     json_iter: impl Iterator<Item = IdJSON> + 'a,
@@ -699,94 +716,6 @@ pub fn process_json_iterable_par<'a>(
     fs
 }
 
-#[deprecated]
-pub fn parse_json_iterable_par<E>(
-    args: &Cli,
-    json_iter: impl Iterator<Item = Result<String, E>> + Send,
-) -> Result<FileStats, Box<dyn error::Error>>
-where
-    E: 'static + Error + Send,
-{
-    let keys_count: DashMap<String, usize> = DashMap::new();
-    let keys_types_count: DashMap<String, usize> = DashMap::new();
-    let mut bad_lines: Vec<String> = Vec::new();
-    let bad_lines_mutex = Mutex::new(&mut bad_lines);
-    let line_count = AtomicUsize::new(0);
-    let mut empty_lines: Vec<String> = Vec::new();
-    let empty_lines_mutex = Mutex::new(&mut empty_lines);
-
-    let json_iter = parse_iter(args, json_iter);
-    let jsonpath = args.jsonpath_selector()?;
-
-    // Bubble up upstream errors
-    let mut err = Ok(());
-    let json_iter = json_iter.scan(&mut err, until_err);
-
-    json_iter
-        .enumerate()
-        .par_bridge()
-        .map(|(i, json_candidate)| (i, serde_json::from_str(&json_candidate)))
-        .inspect(|(i, j): &(usize, Result<Value, serde_json::Error>)| {
-            let line_num = i + 1;
-            if j.is_err() {
-                let mut bad_lines = bad_lines_mutex.lock().unwrap();
-                bad_lines.push(line_num.to_string());
-            }
-            line_count.fetch_max(line_num, Ordering::Release);
-        })
-        .filter(|(_i, j)| j.is_ok())
-        .map(|(i, j)| (i, j.unwrap()))
-        .for_each(|(i, mut json)| {
-            let mut continue_ = false;
-            if let Some(ref selector) = jsonpath {
-                let json_list = selector.select(&json).expect("Failed to parse json");
-                let mut json_list = json_list.iter();
-                if let Some(&json_1) = json_list.next() {
-                    // TODO: handle multiple search results
-                    assert_eq!(None, json_list.next());
-                    json = json_1.to_owned()
-                } else {
-                    let line_num = i + 1;
-                    let mut empty_lines = empty_lines_mutex.lock().unwrap();
-                    empty_lines.push(line_num.to_string());
-                    // continue; doesn't work in for_each
-                    continue_ = true;
-                }
-            }
-            if !continue_ {
-                for value_path in json.value_paths(args.explode_arrays) {
-                    let path = value_path.jsonpath();
-                    let mut counter = keys_count.entry(path.to_owned()).or_insert(0);
-                    *counter.value_mut() += 1;
-
-                    let type_ = value_path.value.value_type();
-                    let path_type = format!("{}::{}", path, type_);
-                    let mut counter = keys_types_count.entry(path_type).or_insert(0);
-                    *counter.value_mut() += 1;
-                }
-            }
-        });
-
-    err?;
-
-    let fs = FileStats {
-        keys_count: keys_count
-            .into_read_only()
-            .iter()
-            .map(|(k, v)| (k.to_owned(), v.to_owned()))
-            .collect(),
-        line_count: line_count.load(Ordering::Acquire),
-        keys_types_count: keys_types_count
-            .into_read_only()
-            .iter()
-            .map(|(k, v)| (k.to_owned(), v.to_owned()))
-            .collect(),
-        bad_lines,
-        empty_lines,
-    };
-    Ok(fs)
-}
-
 // // TODO: impliment method to handle
 // trait Stats {
 //     fn stats(&self) -> FileStats;
@@ -956,13 +885,13 @@ mod tests {
     }
 
     #[test]
-    fn simple_ndjson_iterable_par() {
-        let iter: Vec<Result<String, std::io::Error>> = vec![
-            Ok(r#"{"key1": 123}"#.to_string()),
-            Ok(r#"{"key2": 123}"#.to_string()),
-            Ok(r#"{"key1": 123}"#.to_string()),
+    fn simple_process_json_iterable_par() {
+        let iter: Vec<(String, Value)> = vec![
+            (1.to_string(), json!({"key1": 123})),
+            (2.to_string(), json!({"key2": 123})),
+            (3.to_string(), json!({"key1": 123})),
         ];
-        let iter = iter.into_iter();
+        let iter = iter.into_iter().par_bridge();
 
         let expected = FileStats {
             keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
@@ -975,22 +904,24 @@ mod tests {
         };
 
         let args = Cli::default();
-        let file_stats = parse_json_iterable_par(&args, iter).unwrap();
+        let settings = Settings::init(args).unwrap();
+        let errors = ErrorsPar::default();
+        let file_stats = process_json_iterable_par(&settings, iter, &errors);
         assert_eq!(expected, file_stats);
     }
 
     #[test]
-    fn simple_ndjson_iterable_par_jsonpath() {
-        let iter: Vec<Result<String, std::io::Error>> = vec![
-            Ok(r#"{"key1": 123}"#.to_string()),
-            Ok(r#"{"a": {"key2": 123}}"#.to_string()),
-            Ok(r#"{"key1": 123}"#.to_string()),
+    fn simple_process_json_iterable_par_jsonpath() {
+        let iter: Vec<(String, Value)> = vec![
+            (1.to_string(), json!({"key1": 123})),
+            (2.to_string(), json!({"a": {"key2": 123}})),
+            (3.to_string(), json!({"key1": 123})),
         ];
-        let iter = iter.into_iter();
+        let iter = iter.into_iter().par_bridge();
 
         let expected = FileStats {
             keys_count: IndexMap::from([("$.key2".to_string(), 1)]),
-            line_count: 3,
+            line_count: 1,
             keys_types_count: IndexMap::from([("$.key2::Number".to_string(), 1)]),
             empty_lines: vec![1.to_string(), 3.to_string()],
             ..Default::default()
@@ -998,7 +929,9 @@ mod tests {
 
         let mut args = Cli::default();
         args.jsonpath = Some("$.a".to_string());
-        let file_stats = parse_json_iterable_par(&args, iter).unwrap();
+        let settings = Settings::init(args).unwrap();
+        let errors = ErrorsPar::default();
+        let file_stats = process_json_iterable_par(&settings, iter, &errors);
         assert_eq!(expected, file_stats);
     }
 

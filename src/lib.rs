@@ -4,7 +4,11 @@ use flate2::read::GzDecoder;
 use glob::glob;
 use grep_cli::is_readable_stdin;
 use humantime::format_duration;
+use json::ndjson::parse_ndjson_bufreader_par;
+use json::ndjson::parse_ndjson_receiver_par;
+use json::ndjson::process_json_iterable_par;
 use json::ndjson::Errors;
+use json::ndjson::ErrorsPar;
 use jsonpath_lib::Compiled;
 use std::error;
 use std::ffi::OsStr;
@@ -17,6 +21,7 @@ use crate::json::ndjson::{
     parse_ndjson_bufreader, parse_ndjson_file_path, process_json_iterable, FileStats,
 };
 
+mod io_helpers;
 pub mod json;
 
 type Result<T> = ::std::result::Result<T, Box<dyn error::Error>>;
@@ -47,6 +52,10 @@ pub struct Cli {
     /// Include combined results for all files when using glob
     #[clap(long)]
     merge: bool,
+
+    /// Use parallel version of the processing
+    #[clap(long)]
+    parallel: bool,
 }
 
 impl Cli {
@@ -98,11 +107,34 @@ fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<
     Ok(file_stats)
 }
 
+fn process_ndjson_file_path_par(settings: &Settings, file_path: &PathBuf) -> Result<FileStats> {
+    let errors = ErrorsPar::default();
+
+    let json_iter = parse_ndjson_bufreader_par(&settings.args, file_path, &errors)?;
+    let file_stats = process_json_iterable_par(settings, json_iter, &errors);
+
+    errors.eprint();
+
+    Ok(file_stats)
+}
+
 fn run_stdin(settings: Settings) -> Result<()> {
     let stdin = io::stdin().lock();
     let errors = Errors::default();
     let json_iter = parse_ndjson_bufreader(&settings.args, stdin, &errors)?;
     let stdin_file_stats = process_json_iterable(&settings, json_iter, &errors);
+
+    errors.eprint();
+
+    stdin_file_stats.print()?;
+    Ok(())
+}
+
+fn run_stdin_par(settings: Settings) -> Result<()> {
+    let stdin = io_helpers::stdin::spawn_stdin_channel(1_000_000);
+    let errors = ErrorsPar::default();
+    let json_iter = parse_ndjson_receiver_par(&settings.args, stdin, &errors);
+    let stdin_file_stats = process_json_iterable_par(&settings, json_iter, &errors);
 
     errors.eprint();
 
@@ -143,15 +175,54 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
     Ok(())
 }
 
+fn run_no_stdin_par(settings: Settings) -> Result<()> {
+    if let Some(file_path) = &settings.args.file_path {
+        let file_stats = process_ndjson_file_path_par(&settings, file_path)?;
+
+        file_stats.print()?;
+        return Ok(());
+    }
+
+    if let Some(pattern) = &settings.args.glob {
+        let mut file_stats_list = Vec::new();
+
+        println!("Glob '{}':", pattern);
+        for entry in glob(pattern)? {
+            let file_path = entry?;
+            println!("File '{}':", file_path.display());
+            let file_stats = process_ndjson_file_path_par(&settings, &file_path)?;
+
+            file_stats.print()?;
+            if settings.args.merge {
+                file_stats_list.push(file_stats)
+            }
+        }
+        if settings.args.merge {
+            println!("Overall Stats");
+            let overall_file_stats: FileStats = file_stats_list.iter().sum();
+            // TODO: Fix handling of corrupt & empty lines
+            overall_file_stats.print()?;
+        }
+        return Ok(());
+    }
+    Ok(())
+}
+
 pub fn run(args: Cli) -> Result<()> {
     let now = Instant::now();
     let settings = Settings::init(args)?;
     if is_readable_stdin() {
-        run_stdin(settings)?;
+        if settings.args.parallel {
+            run_stdin_par(settings)?;
+        } else {
+            run_stdin(settings)?;
+        }
     } else if settings.args == Cli::default() {
         let mut cmd = Cli::command();
         cmd.print_help()?;
         return Ok(());
+    } else if settings.args.parallel {
+        run_no_stdin_par(settings)?;
     } else {
         run_no_stdin(settings)?;
     }
