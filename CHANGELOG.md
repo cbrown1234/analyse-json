@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Changed
+
+- Update documentation
+
 ## [0.4.0] - 2022-12-15
 
 ### Added
