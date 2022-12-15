@@ -6,6 +6,20 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- `--parallel` flag to toggle on parallel processing
+- Full support for multiple return values from `--jsonpath` query
+- `--quiet` flag to silence errors
+
+### Changed
+- Refactored use of iterators
+- Improved error handing within iterators
+- Improved error logging
+- Line numbers for file now start at 1
+
+### Fixed
+- stdout to non-tty (pretty) printing json
+
 ## [0.3.0] - 2022-07-02
 
 ### Added
