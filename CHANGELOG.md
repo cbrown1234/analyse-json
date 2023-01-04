@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- `--inspect-arrays` flag for alternative (less verbose than `--explode-arrays`) way of returning paths inside arrays
+
+### Changed
+- Added additional newlines to make output slightly easier to read
+
 ## [0.4.1] - 2022-12-16
 
 ### Changed

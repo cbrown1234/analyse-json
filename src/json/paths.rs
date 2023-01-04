@@ -51,22 +51,41 @@ impl<'a> ValuePath<'a> {
         }
     }
 
-    fn value_paths(self, explode_array: bool) -> Vec<ValuePath<'a>> {
+    pub fn index_custom(
+        &self,
+        index: impl Index,
+        index_custom: impl JSONPathIndex,
+    ) -> ValuePath<'a> {
+        let mut child_path = self.path.to_vec();
+        child_path.push(index_custom.jsonpath());
+        ValuePath {
+            value: &self.value[index],
+            path: child_path,
+        }
+    }
+
+    fn value_paths(self, explode_array: bool, inspect_arrays: bool) -> Vec<ValuePath<'a>> {
         let mut paths = Vec::new();
 
         match self.value {
             Value::Object(map) => {
                 for (k, _) in map {
                     let vp = self.index(k);
-                    let inner_paths = vp.value_paths(explode_array);
+                    let inner_paths = vp.value_paths(explode_array, inspect_arrays);
                     paths.extend(inner_paths)
                 }
             }
             Value::Array(array) => {
-                if explode_array {
+                if inspect_arrays {
+                    for (i, _array_value) in array.iter().enumerate() {
+                        let vp = self.index_custom(i, "[*]");
+                        let inner_paths = vp.value_paths(explode_array, inspect_arrays);
+                        paths.extend(inner_paths)
+                    }
+                } else if explode_array {
                     for (i, _array_value) in array.iter().enumerate() {
                         let vp = self.index(i);
-                        let inner_paths = vp.value_paths(explode_array);
+                        let inner_paths = vp.value_paths(explode_array, inspect_arrays);
                         paths.extend(inner_paths)
                     }
                 } else {
@@ -111,13 +130,13 @@ where
 }
 
 pub trait ValuePaths {
-    fn value_paths(&self, explode_array: bool) -> Vec<ValuePath>;
+    fn value_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<ValuePath>;
 }
 
 impl ValuePaths for Value {
-    fn value_paths(&self, explode_array: bool) -> Vec<ValuePath> {
+    fn value_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<ValuePath> {
         let base_valuepath = ValuePath::new(self, None);
-        base_valuepath.value_paths(explode_array)
+        base_valuepath.value_paths(explode_array, inspect_arrays)
     }
 }
 
@@ -132,21 +151,29 @@ impl ValuePaths for Value {
 // }
 
 pub trait JSONPaths {
-    fn json_paths(&self, explode_array: bool) -> Vec<String>;
+    fn json_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<String>;
 
-    fn json_paths_types(&self, explode_array: bool) -> IndexMap<String, String>;
+    fn json_paths_types(
+        &self,
+        explode_array: bool,
+        inspect_arrays: bool,
+    ) -> IndexMap<String, String>;
 }
 
 impl JSONPaths for Value {
-    fn json_paths(&self, explode_array: bool) -> Vec<String> {
-        self.value_paths(explode_array)
+    fn json_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<String> {
+        self.value_paths(explode_array, inspect_arrays)
             .into_iter()
             .map(|value_path| value_path.jsonpath())
             .collect()
     }
 
-    fn json_paths_types(&self, explode_array: bool) -> IndexMap<String, String> {
-        self.value_paths(explode_array)
+    fn json_paths_types(
+        &self,
+        explode_array: bool,
+        inspect_arrays: bool,
+    ) -> IndexMap<String, String> {
+        self.value_paths(explode_array, inspect_arrays)
             .into_iter()
             .map(|value_path| (value_path.jsonpath(), value_path.value.value_type()))
             .collect()
@@ -190,7 +217,7 @@ mod tests {
     #[test]
     fn parse_valuepaths() {
         let v = json!({"key1": "value1", "key2": ["a", "b"]});
-        let vps = v.value_paths(false);
+        let vps = v.value_paths(false, false);
 
         let vp_0 = ValuePath::new(&v, None);
         let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
@@ -203,14 +230,14 @@ mod tests {
 
         assert_eq!(vps, expected);
         assert_eq!(vps, expected_alt);
-        assert_eq!(v.value_paths(false), expected);
-        assert_eq!(v.value_paths(false), expected_alt);
+        assert_eq!(v.value_paths(false, false), expected);
+        assert_eq!(v.value_paths(false, false), expected_alt);
     }
 
     #[test]
     fn parse_valuepaths_explode_array() {
         let v = json!({"key1": "value1", "key2": ["a", "b"]});
-        let vps = v.value_paths(true);
+        let vps = v.value_paths(true, false);
 
         let vp_0 = ValuePath::new(&v, None);
         let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
@@ -231,17 +258,35 @@ mod tests {
     }
 
     #[test]
+    fn parse_valuepaths_inspect_array() {
+        let v = json!({"key1": "value1", "key2": ["a", "b"]});
+        let vps = v.value_paths(false, true);
+
+        let vp_1 = ValuePath::new(&v["key1"], Some(vec!["key1".to_string()]));
+        let vp_2_1 = ValuePath::new(
+            &v["key2"][0],
+            Some(vec!["key2".to_string(), "[*]".to_string()]),
+        );
+        let vp_2_2 = ValuePath::new(
+            &v["key2"][1],
+            Some(vec!["key2".to_string(), "[*]".to_string()]),
+        );
+
+        assert_eq!(vps, vec![vp_1, vp_2_1, vp_2_2]);
+    }
+
+    #[test]
     fn typical_parse_json_paths() {
         let v = json!({"key1": "value1", "key2": {"subkey1": "value1"}});
         let out_expected = vec![String::from("$.key1"), String::from("$.key2.subkey1")];
-        assert_eq!(v.json_paths(false), out_expected);
+        assert_eq!(v.json_paths(false, false), out_expected);
     }
 
     #[test]
     fn trivial_parse_json_paths() {
         let v = json!(1);
         let out_expected = vec![String::from("$")];
-        assert_eq!(v.json_paths(false), out_expected);
+        assert_eq!(v.json_paths(false, false), out_expected);
     }
 
     #[test]
@@ -250,7 +295,7 @@ mod tests {
         let mut out_expected = IndexMap::new();
         out_expected.insert("$.key1".to_string(), "String".to_string());
         out_expected.insert("$.key2.subkey1".to_string(), "Array".to_string());
-        assert_eq!(v.json_paths_types(false), out_expected);
+        assert_eq!(v.json_paths_types(false, false), out_expected);
     }
 
     #[test]
@@ -258,6 +303,6 @@ mod tests {
         let v = json!(1);
         let mut out_expected = IndexMap::new();
         out_expected.insert("$".to_string(), "Number".to_string());
-        assert_eq!(v.json_paths_types(false), out_expected);
+        assert_eq!(v.json_paths_types(false, false), out_expected);
     }
 }

@@ -439,11 +439,11 @@ impl fmt::Display for FileStats {
         let stream = Stream::Stdout;
         writeln!(f, "Keys:\n{:#?}\n", self.keys_count.keys())?;
         writeln!(f, "Key occurance counts:\n{:#?}", self.keys_count)?;
-        writeln!(f, "Key occurance rate:")?;
+        writeln!(f, "\nKey occurance rate:")?;
         for (k, v) in self.key_occurance() {
             writeln!(f, "{}: {:.3}%", k, v)?;
         }
-        writeln!(f, "Key type occurance rate:")?;
+        writeln!(f, "\nKey type occurance rate:")?;
         for (k, v) in self.key_type_occurance() {
             writeln!(f, "{}: {:.3}%", k, v)?;
         }
@@ -632,7 +632,7 @@ pub fn process_json_iterable(
     for (_id, json) in json_iter {
         fs.line_count += 1;
 
-        for value_path in json.value_paths(args.explode_arrays) {
+        for value_path in json.value_paths(args.explode_arrays, args.inspect_arrays) {
             let path = value_path.jsonpath();
             let counter = fs.keys_count.entry(path.to_owned()).or_insert(0);
             *counter += 1;
@@ -674,7 +674,7 @@ pub fn process_json_iterable_par<'a>(
     json_iter.for_each(|(_id, json)| {
         line_count.fetch_add(1, Ordering::Release);
 
-        for value_path in json.value_paths(args.explode_arrays) {
+        for value_path in json.value_paths(args.explode_arrays, args.inspect_arrays) {
             let path = value_path.jsonpath();
             let mut counter = keys_count.entry(path.to_owned()).or_insert(0);
             *counter.value_mut() += 1;

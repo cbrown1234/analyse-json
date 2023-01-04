@@ -45,7 +45,14 @@ pub struct Cli {
     #[clap(long)]
     jsonpath: Option<String>,
 
-    /// Walk the elements of arrays?
+    /// Walk the elements of arrays grouping elements paths together under `$.path.to.array[*]`?
+    /// Overrides `--explode-arrays`
+    #[clap(long)]
+    inspect_arrays: bool,
+
+    /// Walk the elements of arrays treating arrays like a map of their enumerated elements?
+    /// (E.g. $.path.to.array[0], $.path.to.array[1], ...)
+    /// Ignored if using `--inspect-arrays`
     #[clap(long)]
     explode_arrays: bool,
 
