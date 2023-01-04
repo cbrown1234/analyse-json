@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+## [0.5.0] - 2023-01-04
+
 ### Added
 - `--inspect-arrays` flag for alternative (less verbose than `--explode-arrays`) way of returning paths inside arrays
 
@@ -67,7 +69,8 @@ All notable changes to this project will be documented in this file.
 Initial Release
 
 <!-- next-url -->
-[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/cbrown1234/analyse-json/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/cbrown1234/analyse-json/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/cbrown1234/analyse-json/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/cbrown1234/analyse-json/compare/v0.2.0...v0.3.0
