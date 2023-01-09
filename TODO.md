@@ -21,3 +21,6 @@
 * ~~Enumerate lines from 1 rather than 0 (Maybe part of larger json wrapper struct refactor)~~
 * ~~Refactor ndjson to use error wrappers with location info rather than tuples~~
 * ~~Integrate graceful iterator adapter error handling (`Rc<RefCell<Vec<_>>>`) into filestats~~
+* ~~Shell completion support~~
+ * ~~Runtime creation~~
+ * Build time creating

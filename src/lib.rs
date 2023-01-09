@@ -1,5 +1,6 @@
 use clap::CommandFactory;
 use clap::Parser;
+use clap_complete::Shell;
 use flate2::read::GzDecoder;
 use glob::glob;
 use grep_cli::is_readable_stdin;
@@ -67,6 +68,9 @@ pub struct Cli {
     /// Silence error logging
     #[clap(short, long)]
     quiet: bool,
+
+    #[clap(value_enum, long, id = "SHELL")]
+    generate_completions: Option<Shell>,
 }
 
 impl Cli {
@@ -227,10 +231,20 @@ fn run_no_stdin_par(settings: Settings) -> Result<()> {
     Ok(())
 }
 
+fn print_completions(args: Cli) {
+    let mut cmd = Cli::into_app();
+    let shell = args.generate_completions.expect("only called when needed");
+    let bin_name = cmd.get_name().to_string();
+    clap_complete::generate(shell, &mut cmd, bin_name, &mut io::stdout());
+}
+
 pub fn run(args: Cli) -> Result<()> {
     let now = Instant::now();
     let settings = Settings::init(args)?;
-    if is_readable_stdin() {
+    if settings.args.generate_completions.is_some() {
+        print_completions(settings.args);
+        return Ok(());
+    } else if is_readable_stdin() {
         if settings.args.parallel {
             run_stdin_par(settings)?;
         } else {

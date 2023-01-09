@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- `--generate-completions` flag to generate shell completion scripts
+
 ## [0.5.0] - 2023-01-04
 
 ### Added
