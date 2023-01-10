@@ -42,12 +42,12 @@ pub struct Cli {
     #[clap(short = 'n', long)]
     lines: Option<usize>,
 
-    /// JSONpath query to filter/limit the inspection to
+    /// JSONpath query to filter/limit the inspection to e.g. `'$.a_key.an_array[0]'`
     #[clap(long)]
     jsonpath: Option<String>,
 
     /// Walk the elements of arrays grouping elements paths together under `$.path.to.array[*]`?
-    /// Overrides `--explode-arrays`
+    /// Takes precedence over `--explode-arrays`
     #[clap(long)]
     inspect_arrays: bool,
 
@@ -61,7 +61,7 @@ pub struct Cli {
     #[clap(long)]
     merge: bool,
 
-    /// Use parallel version of the processing
+    /// Use multi-threaded version of the processing
     #[clap(long)]
     parallel: bool,
 
@@ -69,6 +69,7 @@ pub struct Cli {
     #[clap(short, long)]
     quiet: bool,
 
+    /// Output shell completions for the chosen shell to stdout
     #[clap(value_enum, long, id = "SHELL")]
     generate_completions: Option<Shell>,
 }
