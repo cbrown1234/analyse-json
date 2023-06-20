@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- Progress spinner showing lines parsed
+
 ## [0.5.2] - 2023-01-10
 
 ### Changed

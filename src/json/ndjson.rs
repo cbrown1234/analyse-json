@@ -5,6 +5,7 @@ use crate::{get_bufreader, Cli, Settings};
 use super::IndexMap;
 use dashmap::DashMap;
 use grep_cli::is_tty_stdout;
+use indicatif::{ProgressBar, ProgressStyle};
 use jsonpath_lib::JsonPathError;
 use owo_colors::{OwoColorize, Stream};
 use rayon::iter::ParallelBridge;
@@ -629,7 +630,13 @@ pub fn process_json_iterable(
 
     let json_iter = apply_settings(settings, json_iter, errors);
 
+    let spinner = ProgressBar::new_spinner().with_style(
+        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
+            .unwrap(),
+    );
+
     for (_id, json) in json_iter {
+        spinner.inc(1);
         fs.line_count += 1;
 
         for value_path in json.value_paths(args.explode_arrays, args.inspect_arrays) {
@@ -643,6 +650,7 @@ pub fn process_json_iterable(
             *counter += 1;
         }
     }
+    spinner.finish();
 
     for indexed_error in errors.container.borrow().as_slice() {
         let IndexedNDJSONError { location, error } = indexed_error;
@@ -671,6 +679,11 @@ pub fn process_json_iterable_par<'a>(
 
     let json_iter = apply_settings_par(settings, json_iter, errors);
 
+    let spinner = ProgressBar::new_spinner().with_style(
+        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
+            .unwrap(),
+    );
+
     json_iter.for_each(|(_id, json)| {
         line_count.fetch_add(1, Ordering::Release);
 
@@ -684,7 +697,10 @@ pub fn process_json_iterable_par<'a>(
             let mut counter = keys_types_count.entry(path_type).or_insert(0);
             *counter.value_mut() += 1;
         }
+        spinner.inc(1);
     });
+
+    spinner.finish();
 
     for indexed_error in errors.container.lock().unwrap().as_slice() {
         let IndexedNDJSONError { location, error } = indexed_error;
