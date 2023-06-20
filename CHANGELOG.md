@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+## [0.5.3] - 2023-06-20
+
 ### Added
 - Progress spinner showing lines parsed
 
@@ -82,7 +84,8 @@ All notable changes to this project will be documented in this file.
 Initial Release
 
 <!-- next-url -->
-[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/cbrown1234/analyse-json/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/cbrown1234/analyse-json/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/cbrown1234/analyse-json/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/cbrown1234/analyse-json/compare/v0.4.1...v0.5.0
