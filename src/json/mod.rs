@@ -4,6 +4,7 @@ use serde_json::Value;
 pub mod ndjson;
 pub mod paths;
 
+/// Defines string representations of the serde JSON [`Value`] types
 trait ValueType {
     fn value_type(&self) -> String;
 }

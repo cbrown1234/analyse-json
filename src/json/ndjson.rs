@@ -28,6 +28,7 @@ use std::{
     io::{self, prelude::*},
 };
 
+/// Holds linked position information for errors encountered while processing
 #[derive(Debug)]
 pub struct IndexedNDJSONError {
     pub location: String,
@@ -50,6 +51,7 @@ impl fmt::Display for IndexedNDJSONError {
     }
 }
 
+/// Wrapper around the various errors we can encounter while processing the data
 #[derive(Debug)]
 pub enum NDJSONError {
     IOError(io::Error),
@@ -94,6 +96,8 @@ impl From<serde_json::Error> for NDJSONError {
     }
 }
 
+/// Threadsafe storage for errors enounter by parallel processing.
+/// Counterpart to [`Errors`]
 #[derive(Debug)]
 pub struct ErrorsPar<E> {
     pub container: Arc<Mutex<Vec<E>>>,
@@ -111,7 +115,7 @@ impl<E> ErrorsPar<E> {
     }
 
     pub fn push(&self, value: E) {
-        self.container.lock().expect("not poisioned").push(value)
+        self.container.lock().expect("not poisoned").push(value)
     }
 }
 
@@ -139,6 +143,8 @@ impl<E: Display> ErrorsPar<E> {
     }
 }
 
+/// Storage for errors enounter by processing
+/// Counterpart to [`ErrorsPar`]
 #[derive(Debug)]
 pub struct Errors<E> {
     pub container: Rc<RefCell<Vec<E>>>,
@@ -184,12 +190,18 @@ impl<E: Display> fmt::Display for Errors<E> {
     }
 }
 
+// Reusable types for function signatures
 type IJSONCandidate = (usize, String);
 type IdJSON = (String, Value);
 type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
 type NDJSONErrors = Errors<IndexedNDJSONError>;
 type NDJSONErrorsPar = ErrorsPar<IndexedNDJSONError>;
 
+// TODO: add or switch to method on `Receiver<String>`?
+/// Indexes data from the mpsc channel, converts it to serde JSON `Value`s and filters out data that does not
+/// parse as JSON to the `errors` container. Single threaded.
+///
+/// See also: [`parse_ndjson_receiver_par`]
 pub fn parse_ndjson_receiver<'a>(
     _args: &Cli,
     receiver: &'a Receiver<String>,
@@ -208,6 +220,11 @@ pub fn parse_ndjson_receiver<'a>(
     Ok(Box::new(json_iter))
 }
 
+// TODO: add or switch to method on `Receiver<String>`?
+/// Indexes data from the mpsc channel, converts it to serde JSON `Value`s and filters out data that does not
+/// parse as JSON to the `errors` container. Multithreaded version of [`parse_ndjson_receiver`].
+///
+/// See also: [`parse_ndjson_receiver`], [`parse_ndjson_bufreader_par`] & [`parse_ndjson_iter_par`]
 pub fn parse_ndjson_receiver_par<'a>(
     args: &Cli,
     receiver: Receiver<String>,
@@ -220,6 +237,12 @@ pub fn parse_ndjson_receiver_par<'a>(
     parse_ndjson_iter_par(args, receiver, errors)
 }
 
+// TODO: add or switch to method on `&PathBuf`?
+/// Indexes data from the file_path with a bufreader, converts it to serde JSON `Value`s
+/// and filters out data that does not
+/// parse as JSON to the `errors` container. Multithreaded version of [`parse_ndjson_bufreader`].
+///
+/// See also: [`parse_ndjson_bufreader`], [`parse_ndjson_receiver_par`] & [`parse_ndjson_iter_par`]
 pub fn parse_ndjson_bufreader_par<'a>(
     args: &Cli,
     file_path: &PathBuf,
@@ -248,6 +271,10 @@ pub fn parse_ndjson_bufreader_par<'a>(
 
 // https://github.com/rayon-rs/rayon/issues/628
 // https://users.rust-lang.org/t/how-to-wrap-a-non-object-safe-trait-in-an-object-safe-one/33904
+/// Processes indexed data from the Iterator, converts it to serde JSON `Value`s
+/// and filters out data that does not parse as JSON to the `errors` container.
+///
+/// See also: [`parse_ndjson_receiver_par`] & [`parse_ndjson_bufreader_par`]
 pub fn parse_ndjson_iter_par<'a>(
     args: &Cli,
     iter: impl Iterator<Item = IJSONCandidate> + Send + 'a,
@@ -277,6 +304,11 @@ pub fn parse_ndjson_iter_par<'a>(
     })
 }
 
+/// Indexes data from the bufreader, converts it to serde JSON `Value`s
+/// and filters out data that does not
+/// parse as JSON to the `errors` container. Single threaded version of [`parse_ndjson_bufreader_par`].
+///
+/// See also: [`parse_ndjson_bufreader_par`], [`parse_ndjson_file`], [`parse_ndjson_file_path`] & [`parse_ndjson_receiver`]
 pub fn parse_ndjson_bufreader<'a>(
     _args: &Cli,
     reader: impl BufRead + 'a,
@@ -297,6 +329,11 @@ pub fn parse_ndjson_bufreader<'a>(
     Ok(Box::new(json_iter))
 }
 
+/// Indexes data from the file, converts it to serde JSON `Value`s
+/// and filters out data that does not
+/// parse as JSON to the `errors` container. Single threaded.
+///
+/// See also: [`parse_ndjson_bufreader`], [`parse_ndjson_file_path`] & [`parse_ndjson_receiver`]
 pub fn parse_ndjson_file<'a>(
     args: &Cli,
     file: File,
@@ -306,6 +343,11 @@ pub fn parse_ndjson_file<'a>(
     parse_ndjson_bufreader(args, reader, errors)
 }
 
+/// Indexes data from the file_path, converts it to serde JSON `Value`s
+/// and filters out data that does not
+/// parse as JSON to the `errors` container. Single threaded.
+///
+/// See also: [`parse_ndjson_bufreader`], [`parse_ndjson_file`] & [`parse_ndjson_receiver`]
 pub fn parse_ndjson_file_path<'a>(
     args: &Cli,
     file_path: &PathBuf,
@@ -315,6 +357,7 @@ pub fn parse_ndjson_file_path<'a>(
     parse_ndjson_bufreader(args, reader, errors)
 }
 
+/// Iterator that skips, but keeps track of, `Err`s while processing
 pub struct ErrFiltered<I, E> {
     iter: I,
     errors: Errors<E>,
@@ -355,6 +398,7 @@ pub trait IntoErrFiltered<E, T, W>: Iterator<Item = (String, Result<T, W>)> + Si
 
 impl<E, T, I: Iterator<Item = (String, Result<T, W>)>, W> IntoErrFiltered<E, T, W> for I {}
 
+/// Iterator that enumerates all items and skips, but keeps track of, `Err`s while processing
 pub struct EnumeratedErrFiltered<I, E> {
     iter: Enumerate<I>,
     errors: Errors<E>,
@@ -400,6 +444,7 @@ pub trait IntoEnumeratedErrFiltered<E, T, W>: Iterator<Item = Result<T, W>> + Si
 impl<E, T, I: Iterator<Item = Result<T, W>>, W> IntoEnumeratedErrFiltered<E, T, W> for I {}
 
 // TODO: extract stats to separate struct or add "file" id to *_lines
+/// Container for the data collected about the JSONs along the way
 #[derive(Debug, PartialEq, Eq, Default, Clone, Serialize, Deserialize)]
 pub struct FileStats {
     pub keys_count: IndexMap<String, usize>,
@@ -522,6 +567,9 @@ impl<'a> Sum<&'a Self> for FileStats {
     }
 }
 
+/// Handles the jsonpath query expansion of the Iterators values. Single threaded
+///
+/// See also [`expand_jsonpath_query_par`]
 pub fn expand_jsonpath_query<'a>(
     settings: &'a Settings,
     json_iter: impl Iterator<Item = IdJSON> + 'a,
@@ -562,6 +610,9 @@ pub fn expand_jsonpath_query<'a>(
     json_iter_out
 }
 
+/// Handles the jsonpath query expansion of the Iterators values. Multi-threaded.
+///
+/// See also [`expand_jsonpath_query`]
 pub fn expand_jsonpath_query_par<'a>(
     settings: &'a Settings,
     json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
@@ -601,6 +652,9 @@ pub fn expand_jsonpath_query_par<'a>(
     })
 }
 
+/// Apply pre-processing based on settings from CLI args. Single threaded.
+///
+/// See also [`apply_settings_par`]
 pub fn apply_settings<'a>(
     settings: &'a Settings,
     json_iter: impl Iterator<Item = IdJSON> + 'a,
@@ -612,6 +666,9 @@ pub fn apply_settings<'a>(
     expand_jsonpath_query(settings, json_iter, errors)
 }
 
+/// Apply pre-processing based on settings from CLI args. Multi-threaded.
+///
+/// See also [`apply_settings`]
 pub fn apply_settings_par<'a>(
     settings: &'a Settings,
     json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
@@ -620,6 +677,10 @@ pub fn apply_settings_par<'a>(
     expand_jsonpath_query_par(settings, json_iter, errors)
 }
 
+/// Main function processing the JSON data, collecting key infomation about the content.
+/// Single threaded.
+///
+/// See also [`process_json_iterable_par`]
 pub fn process_json_iterable(
     settings: &Settings,
     json_iter: impl Iterator<Item = IdJSON>,
@@ -665,6 +726,10 @@ pub fn process_json_iterable(
     fs
 }
 
+/// Main function processing the JSON data, collecting key infomation about the content.
+/// Mulit-threaded version of [`process_json_iterable`].
+///
+/// See also [`process_json_iterable_par`]
 pub fn process_json_iterable_par<'a>(
     settings: &Settings,
     json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
@@ -738,6 +803,9 @@ pub fn process_json_iterable_par<'a>(
 //     }
 // }
 
+/// Apply line limiting from the arg to the Iterator
+///
+/// See also [`parse_iter`]
 pub fn limit<'a, I, T>(args: &Cli, iter: I) -> Box<dyn Iterator<Item = T> + 'a>
 where
     I: Iterator<Item = T> + 'a,
@@ -749,6 +817,12 @@ where
     }
 }
 
+// TODO: Rename?
+/// Early version of [`apply_settings`], kept as an example of alternative version of
+/// [`limit`] that could be used without the need to `Box` the return value
+///
+/// See also [`limit`]
+#[deprecated(note = "Superseded by `apply_settings`")]
 pub fn parse_iter<E, I>(args: &Cli, iter: I) -> impl Iterator<Item = Result<String, E>>
 where
     I: Iterator<Item = Result<String, E>>,

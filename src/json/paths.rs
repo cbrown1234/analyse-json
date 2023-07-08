@@ -2,6 +2,7 @@ use serde_json::{value::Index, Value};
 
 use super::{IndexMap, ValueType};
 
+/// Wrapper around [`Value`] keeping track of its location within the root parent JSON
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ValuePath<'a> {
     pub value: &'a Value,
@@ -9,8 +10,8 @@ pub struct ValuePath<'a> {
 }
 
 impl<'a> ValuePath<'a> {
-    /// Returns a ValuePath (Serde JSON wrapper) useful for tracking the location
-    /// of subsets o
+    /// Returns a [`ValuePath`] (Serde JSON [`Value`] wrapper) useful for tracking the location
+    /// of indexes into the JSON
     ///
     /// # Arguments
     /// * `value` - Serde JSON Value
@@ -29,6 +30,7 @@ impl<'a> ValuePath<'a> {
         ValuePath { value, path }
     }
 
+    /// JSONpath of `value`s location within the root parent JSON
     pub fn jsonpath(&self) -> String {
         let mut jsonpath = String::from("$");
         for part in &self.path {
@@ -42,6 +44,9 @@ impl<'a> ValuePath<'a> {
         jsonpath
     }
 
+    // Work around until indexing via a trait is supported
+    // https://github.com/rust-lang/rfcs/issues/997
+    /// Index into the inner value, tracks the jsonpath location
     pub fn index(&self, index: impl JSONPathIndex) -> ValuePath<'a> {
         let mut child_path = self.path.to_vec();
         child_path.push(index.jsonpath());
@@ -51,6 +56,7 @@ impl<'a> ValuePath<'a> {
         }
     }
 
+    /// Index into the inner value, enables custom override to the tracked jsonpath location
     pub fn index_custom(
         &self,
         index: impl Index,
@@ -64,6 +70,8 @@ impl<'a> ValuePath<'a> {
         }
     }
 
+    /// Lists all of the `ValuePath`s children by walking the inner value.
+    /// Includes flags for how to walk arrays
     fn value_paths(self, explode_array: bool, inspect_arrays: bool) -> Vec<ValuePath<'a>> {
         let mut paths = Vec::new();
 
@@ -134,12 +142,19 @@ pub trait ValuePaths {
 }
 
 impl ValuePaths for Value {
+    /// Lists all of the `ValuePath` children by walking `Value`.
+    ///
+    /// Useful for generating full lists of JSONpaths within the Value
+    /// with [`ValuePath::jsonpath`]
+    ///
+    /// See also [`Value::json_paths`] from [`JSONPaths`]
     fn value_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<ValuePath> {
         let base_valuepath = ValuePath::new(self, None);
         base_valuepath.value_paths(explode_array, inspect_arrays)
     }
 }
 
+// See https://github.com/rust-lang/rfcs/issues/997
 // impl<'a, I> std::ops::Index<I> for ValuePath<'a>
 // where I: JSONPathIndex {
 //     type Output = ValuePath<'a>;
@@ -151,8 +166,12 @@ impl ValuePaths for Value {
 // }
 
 pub trait JSONPaths {
+    /// Lists all of the json_paths by walking a JSON `self`.
+    /// Includes flags for how to walk arrays
     fn json_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<String>;
 
+    /// Maps all of the json_paths to the type they contain by walking a JSON `self`.
+    /// Includes flags for how to walk arrays
     fn json_paths_types(
         &self,
         explode_array: bool,

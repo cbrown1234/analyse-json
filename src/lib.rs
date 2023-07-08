@@ -86,6 +86,7 @@ impl Cli {
     }
 }
 
+/// Wrapper around [`Cli`] to hold derived attributes
 pub struct Settings {
     args: Cli,
     jsonpath_selector: Option<Compiled>,
@@ -234,7 +235,9 @@ fn run_no_stdin_par(settings: Settings) -> Result<()> {
 
 fn print_completions(args: Cli) {
     let mut cmd = Cli::into_app();
-    let shell = args.generate_completions.expect("only called when needed");
+    let shell = args
+        .generate_completions
+        .expect("function only called when argument specified");
     let bin_name = cmd.get_name().to_string();
     clap_complete::generate(shell, &mut cmd, bin_name, &mut io::stdout());
 }
