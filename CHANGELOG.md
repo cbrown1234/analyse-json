@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+## [0.5.5] - 2023-07-12
+
 ### Added
 - More documentation to the lib
 
@@ -92,7 +94,8 @@ All notable changes to this project will be documented in this file.
 Initial Release
 
 <!-- next-url -->
-[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.5.5...HEAD
+[0.5.5]: https://github.com/cbrown1234/analyse-json/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/cbrown1234/analyse-json/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/cbrown1234/analyse-json/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/cbrown1234/analyse-json/compare/v0.5.1...v0.5.2
