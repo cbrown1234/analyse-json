@@ -443,20 +443,20 @@ pub trait IntoEnumeratedErrFiltered<E, T, W>: Iterator<Item = Result<T, W>> + Si
 
 impl<E, T, I: Iterator<Item = Result<T, W>>, W> IntoEnumeratedErrFiltered<E, T, W> for I {}
 
-// TODO: extract stats to separate struct or add "file" id to *_lines
 /// Container for the data collected about the JSONs along the way
 #[derive(Debug, PartialEq, Eq, Default, Clone, Serialize, Deserialize)]
-pub struct FileStats {
+pub struct Stats {
     pub keys_count: IndexMap<String, usize>,
     pub line_count: usize,
     pub bad_lines: Vec<String>,
     pub keys_types_count: IndexMap<String, usize>,
     pub empty_lines: Vec<String>,
+    // TODO: Add this: pub json_count: usize,
 }
 
-impl FileStats {
-    pub fn new() -> FileStats {
-        FileStats {
+impl Stats {
+    pub fn new() -> Stats {
+        Stats {
             keys_count: IndexMap::new(),
             line_count: 0,
             bad_lines: Vec::new(),
@@ -480,7 +480,7 @@ impl FileStats {
     }
 }
 
-impl fmt::Display for FileStats {
+impl fmt::Display for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let stream = Stream::Stdout;
         writeln!(f, "Keys:\n{:#?}\n", self.keys_count.keys())?;
@@ -514,7 +514,7 @@ impl fmt::Display for FileStats {
     }
 }
 
-impl FileStats {
+impl Stats {
     pub fn print(&self) -> std::result::Result<(), serde_json::Error> {
         if is_tty_stdout() {
             println!("{}", self);
@@ -527,43 +527,159 @@ impl FileStats {
     }
 }
 
+// impl Add for Stats {
+//     type Output = Self;
+
+//     fn add(self, rhs: Self) -> Self::Output {
+//         let mut output = self;
+
+//         for (k, v) in rhs.keys_count {
+//             let counter = output.keys_count.entry(k).or_insert(0);
+//             *counter += v
+//         }
+
+//         for (k, v) in rhs.keys_types_count {
+//             let counter = output.keys_types_count.entry(k).or_insert(0);
+//             *counter += v
+//         }
+
+//         output.line_count += rhs.line_count;
+
+//         // Not sure these are compatible
+//         output.bad_lines = Vec::new();
+//         output.empty_lines = Vec::new();
+
+//         output
+//     }
+// }
+
+// impl Add<&Self> for Stats {
+//     type Output = Self;
+
+//     fn add(self, rhs: &Self) -> Self::Output {
+//         self.add(rhs.clone())
+//     }
+// }
+
+// impl<'a> Sum<&'a Self> for Stats {
+//     fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+//         iter.fold(Self::default(), |acc, x| acc + x)
+//     }
+// }
+
+#[derive(Debug, PartialEq, Eq, Default, Clone, Serialize, Deserialize)]
+pub struct FileStats {
+    pub file_path: String,
+    pub stats: Stats,
+}
+
+impl FileStats {
+    pub fn new(file_path: String, stats: Stats) -> Self {
+        Self { file_path, stats }
+    }
+}
+
 impl Add for FileStats {
-    type Output = Self;
+    type Output = Stats;
 
     fn add(self, rhs: Self) -> Self::Output {
-        let mut output = self;
+        let mut output = self.stats;
 
-        for (k, v) in rhs.keys_count {
+        for (k, v) in rhs.stats.keys_count {
             let counter = output.keys_count.entry(k).or_insert(0);
             *counter += v
         }
 
-        for (k, v) in rhs.keys_types_count {
+        for (k, v) in rhs.stats.keys_types_count {
             let counter = output.keys_types_count.entry(k).or_insert(0);
             *counter += v
         }
 
-        output.line_count += rhs.line_count;
+        output.line_count += rhs.stats.line_count;
 
-        // Not sure these are compatible
-        output.bad_lines = Vec::new();
-        output.empty_lines = Vec::new();
+        output.bad_lines = output
+            .bad_lines
+            .into_iter()
+            .map(|line_id| format!("{}:{line_id}", self.file_path))
+            .collect();
+        output.bad_lines.extend(
+            rhs.stats
+                .bad_lines
+                .into_iter()
+                .map(|line_id| format!("{}:{line_id}", rhs.file_path)),
+        );
+
+        output.empty_lines = output
+            .empty_lines
+            .into_iter()
+            .map(|line_id| format!("{}:{line_id}", self.file_path))
+            .collect();
+        output.empty_lines.extend(
+            rhs.stats
+                .empty_lines
+                .into_iter()
+                .map(|line_id| format!("{}:{line_id}", rhs.file_path)),
+        );
 
         output
     }
 }
 
 impl Add<&Self> for FileStats {
-    type Output = Self;
+    type Output = Stats;
 
     fn add(self, rhs: &Self) -> Self::Output {
         self.add(rhs.clone())
     }
 }
 
-impl<'a> Sum<&'a Self> for FileStats {
-    fn sum<I: Iterator<Item = &'a Self>>(iter: I) -> Self {
+impl<'a> Sum<&'a FileStats> for Stats {
+    fn sum<I: Iterator<Item = &'a FileStats>>(iter: I) -> Stats {
         iter.fold(Self::default(), |acc, x| acc + x)
+    }
+}
+
+impl Add<FileStats> for Stats {
+    type Output = Self;
+
+    fn add(self, rhs: FileStats) -> Self::Output {
+        let mut output = self;
+
+        for (k, v) in rhs.stats.keys_count {
+            let counter = output.keys_count.entry(k).or_insert(0);
+            *counter += v
+        }
+
+        for (k, v) in rhs.stats.keys_types_count {
+            let counter = output.keys_types_count.entry(k).or_insert(0);
+            *counter += v
+        }
+
+        output.line_count += rhs.stats.line_count;
+
+        output.bad_lines.extend(
+            rhs.stats
+                .bad_lines
+                .into_iter()
+                .map(|line_id| format!("{}:{line_id}", rhs.file_path)),
+        );
+
+        output.empty_lines.extend(
+            rhs.stats
+                .empty_lines
+                .into_iter()
+                .map(|line_id| format!("{}:{line_id}", rhs.file_path)),
+        );
+
+        output
+    }
+}
+
+impl Add<&FileStats> for Stats {
+    type Output = Self;
+
+    fn add(self, rhs: &FileStats) -> Self::Output {
+        self.add(rhs.clone())
     }
 }
 
@@ -685,8 +801,8 @@ pub fn process_json_iterable(
     settings: &Settings,
     json_iter: impl Iterator<Item = IdJSON>,
     errors: &NDJSONErrors,
-) -> FileStats {
-    let mut fs = FileStats::new();
+) -> Stats {
+    let mut fs = Stats::new();
     let args = &settings.args;
 
     let json_iter = apply_settings(settings, json_iter, errors);
@@ -734,8 +850,8 @@ pub fn process_json_iterable_par<'a>(
     settings: &Settings,
     json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
     errors: &'a NDJSONErrorsPar,
-) -> FileStats {
-    let mut fs = FileStats::new();
+) -> Stats {
+    let mut fs = Stats::new();
     let args = &settings.args;
 
     let keys_count: DashMap<String, usize> = DashMap::new();
@@ -927,7 +1043,7 @@ mod tests {
         let settings = Settings::init(args).unwrap();
         let errors = Errors::default();
 
-        let expected = FileStats {
+        let expected = Stats {
             keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
             line_count: 3,
             keys_types_count: IndexMap::from([
@@ -937,8 +1053,8 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = process_json_iterable(&settings, json_iter_in, &errors);
-        assert_eq!(expected, file_stats);
+        let stats = process_json_iterable(&settings, json_iter_in, &errors);
+        assert_eq!(expected, stats);
         assert!(errors.container.borrow().is_empty())
     }
 
@@ -956,7 +1072,7 @@ mod tests {
         let settings = Settings::init(args).unwrap();
         let errors = Errors::default();
 
-        let expected = FileStats {
+        let expected = Stats {
             keys_count: IndexMap::from([("$".to_string(), 2)]),
             line_count: 2,
             keys_types_count: IndexMap::from([("$::Number".to_string(), 2)]),
@@ -964,8 +1080,8 @@ mod tests {
             ..Default::default()
         };
 
-        let file_stats = process_json_iterable(&settings, json_iter_in, &errors);
-        assert_eq!(expected, file_stats);
+        let stats = process_json_iterable(&settings, json_iter_in, &errors);
+        assert_eq!(expected, stats);
         assert!(errors.container.borrow().len() == 1)
     }
 
@@ -978,7 +1094,7 @@ mod tests {
         ];
         let iter = iter.into_iter().par_bridge();
 
-        let expected = FileStats {
+        let expected = Stats {
             keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
             line_count: 3,
             keys_types_count: IndexMap::from([
@@ -991,8 +1107,8 @@ mod tests {
         let args = Cli::default();
         let settings = Settings::init(args).unwrap();
         let errors = ErrorsPar::default();
-        let file_stats = process_json_iterable_par(&settings, iter, &errors);
-        assert_eq!(expected, file_stats);
+        let stats = process_json_iterable_par(&settings, iter, &errors);
+        assert_eq!(expected, stats);
     }
 
     #[test]
@@ -1004,7 +1120,7 @@ mod tests {
         ];
         let iter = iter.into_iter().par_bridge();
 
-        let expected = FileStats {
+        let expected = Stats {
             keys_count: IndexMap::from([("$.key2".to_string(), 1)]),
             line_count: 1,
             keys_types_count: IndexMap::from([("$.key2::Number".to_string(), 1)]),
@@ -1016,47 +1132,60 @@ mod tests {
         args.jsonpath = Some("$.a".to_string());
         let settings = Settings::init(args).unwrap();
         let errors = ErrorsPar::default();
-        let file_stats = process_json_iterable_par(&settings, iter, &errors);
-        assert_eq!(expected, file_stats);
+        let stats = process_json_iterable_par(&settings, iter, &errors);
+        assert_eq!(expected, stats);
     }
 
     #[test]
     fn add_filestats() {
         let lhs = FileStats {
-            keys_count: IndexMap::from([("$.key1".to_string(), 3), ("$.key2".to_string(), 2)]),
-            line_count: 3,
-            keys_types_count: IndexMap::from([
-                ("$.key1::Number".to_string(), 3),
-                ("$.key2::Number".to_string(), 2),
-            ]),
-            ..Default::default()
+            file_path: "file/1.json".to_string(),
+            stats: Stats {
+                keys_count: IndexMap::from([("$.key1".to_string(), 3), ("$.key2".to_string(), 2)]),
+                line_count: 5,
+                keys_types_count: IndexMap::from([
+                    ("$.key1::Number".to_string(), 3),
+                    ("$.key2::Number".to_string(), 2),
+                ]),
+                bad_lines: vec!["4".to_string()],
+                empty_lines: vec!["5".to_string()],
+            },
         };
         let rhs = FileStats {
-            keys_count: IndexMap::from([("$.key3".to_string(), 3), ("$.key2".to_string(), 2)]),
-            line_count: 3,
-            keys_types_count: IndexMap::from([
-                ("$.key3::Number".to_string(), 3),
-                ("$.key2::Number".to_string(), 2),
-            ]),
-            ..Default::default()
+            file_path: "file/2.json".to_string(),
+            stats: Stats {
+                keys_count: IndexMap::from([("$.key3".to_string(), 3), ("$.key2".to_string(), 2)]),
+                line_count: 7,
+                keys_types_count: IndexMap::from([
+                    ("$.key3::Number".to_string(), 3),
+                    ("$.key2::Number".to_string(), 2),
+                ]),
+                bad_lines: vec!["1".to_string()],
+                empty_lines: vec!["2".to_string()],
+            },
         };
-        let expected = FileStats {
+        let expected = Stats {
             keys_count: IndexMap::from([
                 ("$.key1".to_string(), 3),
                 ("$.key2".to_string(), 4),
                 ("$.key3".to_string(), 3),
             ]),
-            line_count: 6,
+            line_count: 12,
             keys_types_count: IndexMap::from([
                 ("$.key1::Number".to_string(), 3),
                 ("$.key2::Number".to_string(), 4),
                 ("$.key3::Number".to_string(), 3),
             ]),
-            ..Default::default()
+            bad_lines: vec!["file/1.json:4".to_string(), "file/2.json:1".to_string()],
+            empty_lines: vec!["file/1.json:5".to_string(), "file/2.json:2".to_string()],
         };
 
+        let vec_of_file_stats = vec![lhs.clone(), rhs.clone()];
+        let actual_ref = lhs.clone() + &rhs;
         let actual = lhs + rhs;
 
-        assert_eq!(actual, expected)
+        assert_eq!(actual, expected);
+        assert_eq!(actual_ref, expected);
+        assert_eq!(vec_of_file_stats.iter().sum::<Stats>(), expected);
     }
 }

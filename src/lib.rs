@@ -18,8 +18,9 @@ use std::io::{self, BufRead};
 use std::path::PathBuf;
 use std::time::Instant;
 
+use crate::json::ndjson::FileStats;
 use crate::json::ndjson::{
-    parse_ndjson_bufreader, parse_ndjson_file_path, process_json_iterable, FileStats,
+    parse_ndjson_bufreader, parse_ndjson_file_path, process_json_iterable, Stats,
 };
 
 mod io_helpers;
@@ -113,7 +114,7 @@ fn get_bufreader(_args: &Cli, file_path: &std::path::PathBuf) -> Result<Box<dyn 
     }
 }
 
-fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<FileStats> {
+fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<Stats> {
     let errors = Errors::default();
 
     let json_iter = parse_ndjson_file_path(&settings.args, file_path, &errors)?;
@@ -126,7 +127,7 @@ fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<
     Ok(file_stats)
 }
 
-fn process_ndjson_file_path_par(settings: &Settings, file_path: &PathBuf) -> Result<FileStats> {
+fn process_ndjson_file_path_par(settings: &Settings, file_path: &PathBuf) -> Result<Stats> {
     let errors = ErrorsPar::default();
 
     let json_iter = parse_ndjson_bufreader_par(&settings.args, file_path, &errors)?;
@@ -143,13 +144,13 @@ fn run_stdin(settings: Settings) -> Result<()> {
     let stdin = io::stdin().lock();
     let errors = Errors::default();
     let json_iter = parse_ndjson_bufreader(&settings.args, stdin, &errors)?;
-    let stdin_file_stats = process_json_iterable(&settings, json_iter, &errors);
+    let stdin_stats = process_json_iterable(&settings, json_iter, &errors);
 
     if !settings.args.quiet {
         errors.eprint();
     }
 
-    stdin_file_stats.print()?;
+    stdin_stats.print()?;
     Ok(())
 }
 
@@ -157,13 +158,13 @@ fn run_stdin_par(settings: Settings) -> Result<()> {
     let stdin = io_helpers::stdin::spawn_stdin_channel(1_000_000);
     let errors = ErrorsPar::default();
     let json_iter = parse_ndjson_receiver_par(&settings.args, stdin, &errors);
-    let stdin_file_stats = process_json_iterable_par(&settings, json_iter, &errors);
+    let stdin_stats = process_json_iterable_par(&settings, json_iter, &errors);
 
     if !settings.args.quiet {
         errors.eprint();
     }
 
-    stdin_file_stats.print()?;
+    stdin_stats.print()?;
     Ok(())
 }
 
@@ -182,17 +183,19 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
         for entry in glob(pattern)? {
             let file_path = entry?;
             println!("File '{}':", file_path.display());
-            let file_stats = process_ndjson_file_path(&settings, &file_path)?;
+            let file_stats = FileStats::new(
+                file_path.to_string_lossy().into_owned(),
+                process_ndjson_file_path(&settings, &file_path)?,
+            );
 
-            file_stats.print()?;
+            file_stats.stats.print()?;
             if settings.args.merge {
                 file_stats_list.push(file_stats)
             }
         }
         if settings.args.merge {
             println!("Overall Stats");
-            let overall_file_stats: FileStats = file_stats_list.iter().sum();
-            // TODO: Fix handling of corrupt & empty lines
+            let overall_file_stats: Stats = file_stats_list.iter().sum();
             overall_file_stats.print()?;
         }
         return Ok(());
@@ -215,17 +218,19 @@ fn run_no_stdin_par(settings: Settings) -> Result<()> {
         for entry in glob(pattern)? {
             let file_path = entry?;
             println!("File '{}':", file_path.display());
-            let file_stats = process_ndjson_file_path_par(&settings, &file_path)?;
+            let file_stats = FileStats::new(
+                file_path.to_string_lossy().into_owned(),
+                process_ndjson_file_path_par(&settings, &file_path)?,
+            );
 
-            file_stats.print()?;
+            file_stats.stats.print()?;
             if settings.args.merge {
                 file_stats_list.push(file_stats)
             }
         }
         if settings.args.merge {
             println!("Overall Stats");
-            let overall_file_stats: FileStats = file_stats_list.iter().sum();
-            // TODO: Fix handling of corrupt & empty lines
+            let overall_file_stats: Stats = file_stats_list.iter().sum();
             overall_file_stats.print()?;
         }
         return Ok(());

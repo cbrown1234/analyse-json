@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+- More documentation to the lib
+
+### Fixed
+- Previously `--merge` did not include invalid lines info
+
 ## [0.5.4] - 2023-06-20
 
 ## [0.5.3] - 2023-06-20
