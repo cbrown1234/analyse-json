@@ -1,19 +1,22 @@
+pub mod errors;
+
 use crate::json::paths::ValuePaths;
 use crate::json::ValueType;
 use crate::{get_bufreader, Cli, Settings};
+
+use self::errors::NDJSONError;
 
 use super::IndexMap;
 use dashmap::DashMap;
 use grep_cli::is_tty_stdout;
 use indicatif::{ProgressBar, ProgressStyle};
-use jsonpath_lib::JsonPathError;
 use owo_colors::{OwoColorize, Stream};
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
 use serde::{Deserialize, Serialize};
 pub use serde_json::Value;
 use std::cell::RefCell;
-use std::error::{self, Error};
+use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::fs::File;
 use std::iter::{Enumerate, Sum};
@@ -48,51 +51,6 @@ impl fmt::Display for IndexedNDJSONError {
             write!(f, "; {source}")?;
         }
         Ok(())
-    }
-}
-
-/// Wrapper around the various errors we can encounter while processing the data
-#[derive(Debug)]
-pub enum NDJSONError {
-    IOError(io::Error),
-    JSONParsingError(serde_json::Error),
-    EmptyQuery,
-    QueryJsonPathError(JsonPathError),
-}
-
-impl fmt::Display for NDJSONError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            NDJSONError::IOError(_e) => write!(f, "line failed due to an IO error"),
-            NDJSONError::JSONParsingError(_e) => write!(f, "line failed to parse as valid JSON"),
-            NDJSONError::EmptyQuery => write!(f, "line returned empty for ther given query"),
-            NDJSONError::QueryJsonPathError(_e) => {
-                write!(f, "line failed due to a JsonPath Query error")
-            }
-        }
-    }
-}
-
-impl error::Error for NDJSONError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match *self {
-            NDJSONError::IOError(ref e) => Some(e),
-            NDJSONError::JSONParsingError(ref e) => Some(e),
-            NDJSONError::EmptyQuery => None,
-            NDJSONError::QueryJsonPathError(ref e) => Some(e),
-        }
-    }
-}
-
-impl From<io::Error> for NDJSONError {
-    fn from(err: io::Error) -> NDJSONError {
-        NDJSONError::IOError(err)
-    }
-}
-
-impl From<serde_json::Error> for NDJSONError {
-    fn from(err: serde_json::Error) -> NDJSONError {
-        NDJSONError::JSONParsingError(err)
     }
 }
 
