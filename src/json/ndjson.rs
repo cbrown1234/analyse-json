@@ -5,146 +5,22 @@ use crate::json::paths::ValuePaths;
 use crate::json::{Value, ValueType};
 use crate::{get_bufreader, Cli, Settings};
 
+use self::errors::collection::{Errors, ErrorsPar, IndexedNDJSONError};
 use self::errors::NDJSONError;
 pub use self::stats::{FileStats, Stats};
 
 use dashmap::DashMap;
 use indicatif::{ProgressBar, ProgressStyle};
-use owo_colors::{OwoColorize, Stream};
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
 
-use std::cell::RefCell;
 use std::error::Error;
-use std::fmt::{Debug, Display};
 use std::fs::File;
+use std::io::{self, prelude::*};
 use std::iter::Enumerate;
 use std::path::PathBuf;
-use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
-use std::sync::{Arc, Mutex};
-use std::{
-    fmt,
-    io::{self, prelude::*},
-};
-
-/// Holds linked position information for errors encountered while processing
-#[derive(Debug)]
-pub struct IndexedNDJSONError {
-    pub location: String,
-    pub error: NDJSONError,
-}
-
-impl IndexedNDJSONError {
-    fn new(location: String, error: NDJSONError) -> Self {
-        Self { location, error }
-    }
-}
-
-impl fmt::Display for IndexedNDJSONError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Line {}: {}", self.location, self.error)?;
-        if let Some(source) = self.error.source() {
-            write!(f, "; {source}")?;
-        }
-        Ok(())
-    }
-}
-
-/// Threadsafe storage for errors enounter by parallel processing.
-/// Counterpart to [`Errors`]
-#[derive(Debug)]
-pub struct ErrorsPar<E> {
-    pub container: Arc<Mutex<Vec<E>>>,
-}
-
-impl<E> ErrorsPar<E> {
-    pub fn new(container: Arc<Mutex<Vec<E>>>) -> Self {
-        Self { container }
-    }
-
-    pub fn new_ref(&self) -> Self {
-        Self {
-            container: Arc::clone(&self.container),
-        }
-    }
-
-    pub fn push(&self, value: E) {
-        self.container.lock().expect("not poisoned").push(value)
-    }
-}
-
-impl<E> Default for ErrorsPar<E> {
-    fn default() -> Self {
-        Self::new(Arc::new(Mutex::new(vec![])))
-    }
-}
-
-impl<E: Display> fmt::Display for ErrorsPar<E> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for i in self.container.lock().unwrap().as_slice() {
-            writeln!(f, "{i}")?;
-        }
-        Ok(())
-    }
-}
-
-impl<E: Display> ErrorsPar<E> {
-    pub fn eprint(&self) {
-        let stream = Stream::Stdout;
-        if !self.container.lock().unwrap().is_empty() {
-            eprintln!("{}", self.if_supports_color(stream, |text| text.red()));
-        }
-    }
-}
-
-/// Storage for errors enounter by processing
-/// Counterpart to [`ErrorsPar`]
-#[derive(Debug)]
-pub struct Errors<E> {
-    pub container: Rc<RefCell<Vec<E>>>,
-}
-
-impl<E> Errors<E> {
-    pub fn new(container: Rc<RefCell<Vec<E>>>) -> Self {
-        Self { container }
-    }
-
-    pub fn new_ref(&self) -> Self {
-        Self {
-            container: Rc::clone(&self.container),
-        }
-    }
-
-    pub fn push(&self, value: E) {
-        self.container.borrow_mut().push(value)
-    }
-}
-
-impl<E: Display> Errors<E> {
-    pub fn eprint(&self) {
-        let stream = Stream::Stdout;
-        if !self.container.borrow().is_empty() {
-            eprintln!("{}", self.if_supports_color(stream, |text| text.red()));
-        }
-    }
-}
-
-impl<E> Default for Errors<E> {
-    fn default() -> Self {
-        Self::new(Rc::new(RefCell::new(vec![])))
-    }
-}
-
-impl<E: Display> fmt::Display for Errors<E> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for i in self.container.borrow().as_slice() {
-            writeln!(f, "{i}")?;
-        }
-        Ok(())
-    }
-}
 
 // Reusable types for function signatures
 type IJSONCandidate = (usize, String);
@@ -623,17 +499,6 @@ pub fn process_json_iterable_par<'a>(
         .collect();
     fs
 }
-
-// // TODO: impliment method to handle
-// trait Stats {
-//     fn stats(&self) -> FileStats;
-// }
-
-// impl<T: impl Iterator<Item = Result<String, E>> + Send> Stats for T {
-//     fn stats(&self) {
-//         parse_json_iterable_par(&self)
-//     }
-// }
 
 /// Apply line limiting from the arg to the Iterator
 ///
