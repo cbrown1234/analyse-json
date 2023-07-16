@@ -1,9 +1,10 @@
 use std::cell::RefCell;
 use std::error::Error;
-use std::fmt;
 use std::fmt::Display;
+use std::iter::Enumerate;
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
+use std::{fmt, io};
 
 use owo_colors::{OwoColorize, Stream};
 
@@ -126,3 +127,89 @@ impl<E: Display> fmt::Display for Errors<E> {
         Ok(())
     }
 }
+
+/// Iterator that skips, but keeps track of, `Err`s while processing
+pub struct ErrFiltered<I, E> {
+    iter: I,
+    errors: Errors<E>,
+}
+
+impl<E, T, I: Iterator<Item = (String, Result<T, W>)>, W> ErrFiltered<I, E> {
+    pub fn new(iter: I, errors: Errors<E>) -> Self {
+        Self { iter, errors }
+    }
+}
+
+impl<T, I> Iterator for ErrFiltered<I, IndexedNDJSONError>
+where
+    I: Iterator<Item = (String, Result<T, serde_json::Error>)>,
+{
+    type Item = (String, T);
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (id, next_item) = self.iter.next()?;
+            match next_item {
+                Ok(item) => break Some((id, item)),
+                Err(e) => {
+                    self.errors.push(IndexedNDJSONError::new(
+                        id,
+                        NDJSONError::JSONParsingError(e),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+pub trait IntoErrFiltered<E, T, W>: Iterator<Item = (String, Result<T, W>)> + Sized {
+    fn to_err_filtered(self, errors: Errors<E>) -> ErrFiltered<Self, E> {
+        ErrFiltered::new(self, errors)
+    }
+}
+
+impl<E, T, I: Iterator<Item = (String, Result<T, W>)>, W> IntoErrFiltered<E, T, W> for I {}
+
+/// Iterator that enumerates all items and skips, but keeps track of, `Err`s while processing
+pub struct EnumeratedErrFiltered<I, E> {
+    iter: Enumerate<I>,
+    errors: Errors<E>,
+}
+
+impl<E, T, I: Iterator<Item = Result<T, W>>, W> EnumeratedErrFiltered<I, E> {
+    pub fn new(iter: I, errors: Errors<E>) -> Self {
+        Self {
+            iter: iter.enumerate(),
+            errors,
+        }
+    }
+}
+
+impl<T, I> Iterator for EnumeratedErrFiltered<I, IndexedNDJSONError>
+where
+    I: Iterator<Item = Result<T, io::Error>>,
+{
+    type Item = (usize, T);
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let (i, next_item) = self.iter.next()?;
+            let i = i + 1; // count lines from 1
+            match next_item {
+                Ok(item) => break Some((i, item)),
+                Err(e) => {
+                    self.errors.push(IndexedNDJSONError::new(
+                        i.to_string(),
+                        NDJSONError::IOError(e),
+                    ));
+                }
+            }
+        }
+    }
+}
+
+pub trait IntoEnumeratedErrFiltered<E, T, W>: Iterator<Item = Result<T, W>> + Sized {
+    fn to_enumerated_err_filtered(self, errors: Errors<E>) -> EnumeratedErrFiltered<Self, E> {
+        EnumeratedErrFiltered::new(self, errors)
+    }
+}
+
+impl<E, T, I: Iterator<Item = Result<T, W>>, W> IntoEnumeratedErrFiltered<E, T, W> for I {}

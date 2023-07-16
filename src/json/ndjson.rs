@@ -5,7 +5,9 @@ use crate::json::paths::ValuePaths;
 use crate::json::{Value, ValueType};
 use crate::{get_bufreader, Cli, Settings};
 
-use self::errors::collection::{Errors, ErrorsPar, IndexedNDJSONError};
+use self::errors::collection::{
+    Errors, ErrorsPar, IndexedNDJSONError, IntoEnumeratedErrFiltered, IntoErrFiltered,
+};
 use self::errors::NDJSONError;
 pub use self::stats::{FileStats, Stats};
 
@@ -17,7 +19,6 @@ use rayon::prelude::ParallelIterator;
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, prelude::*};
-use std::iter::Enumerate;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
@@ -188,92 +189,6 @@ pub fn parse_ndjson_file_path<'a>(
     let reader = get_bufreader(args, file_path)?;
     parse_ndjson_bufreader(args, reader, errors)
 }
-
-/// Iterator that skips, but keeps track of, `Err`s while processing
-pub struct ErrFiltered<I, E> {
-    iter: I,
-    errors: Errors<E>,
-}
-
-impl<E, T, I: Iterator<Item = (String, Result<T, W>)>, W> ErrFiltered<I, E> {
-    pub fn new(iter: I, errors: Errors<E>) -> Self {
-        Self { iter, errors }
-    }
-}
-
-impl<T, I> Iterator for ErrFiltered<I, IndexedNDJSONError>
-where
-    I: Iterator<Item = (String, Result<T, serde_json::Error>)>,
-{
-    type Item = (String, T);
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let (id, next_item) = self.iter.next()?;
-            match next_item {
-                Ok(item) => break Some((id, item)),
-                Err(e) => {
-                    self.errors.push(IndexedNDJSONError::new(
-                        id,
-                        NDJSONError::JSONParsingError(e),
-                    ));
-                }
-            }
-        }
-    }
-}
-
-pub trait IntoErrFiltered<E, T, W>: Iterator<Item = (String, Result<T, W>)> + Sized {
-    fn to_err_filtered(self, errors: Errors<E>) -> ErrFiltered<Self, E> {
-        ErrFiltered::new(self, errors)
-    }
-}
-
-impl<E, T, I: Iterator<Item = (String, Result<T, W>)>, W> IntoErrFiltered<E, T, W> for I {}
-
-/// Iterator that enumerates all items and skips, but keeps track of, `Err`s while processing
-pub struct EnumeratedErrFiltered<I, E> {
-    iter: Enumerate<I>,
-    errors: Errors<E>,
-}
-
-impl<E, T, I: Iterator<Item = Result<T, W>>, W> EnumeratedErrFiltered<I, E> {
-    pub fn new(iter: I, errors: Errors<E>) -> Self {
-        Self {
-            iter: iter.enumerate(),
-            errors,
-        }
-    }
-}
-
-impl<T, I> Iterator for EnumeratedErrFiltered<I, IndexedNDJSONError>
-where
-    I: Iterator<Item = Result<T, io::Error>>,
-{
-    type Item = (usize, T);
-    fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            let (i, next_item) = self.iter.next()?;
-            let i = i + 1; // count lines from 1
-            match next_item {
-                Ok(item) => break Some((i, item)),
-                Err(e) => {
-                    self.errors.push(IndexedNDJSONError::new(
-                        i.to_string(),
-                        NDJSONError::IOError(e),
-                    ));
-                }
-            }
-        }
-    }
-}
-
-pub trait IntoEnumeratedErrFiltered<E, T, W>: Iterator<Item = Result<T, W>> + Sized {
-    fn to_enumerated_err_filtered(self, errors: Errors<E>) -> EnumeratedErrFiltered<Self, E> {
-        EnumeratedErrFiltered::new(self, errors)
-    }
-}
-
-impl<E, T, I: Iterator<Item = Result<T, W>>, W> IntoEnumeratedErrFiltered<E, T, W> for I {}
 
 /// Handles the jsonpath query expansion of the Iterators values. Single threaded
 ///
