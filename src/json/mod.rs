@@ -1,5 +1,5 @@
 pub use indexmap::IndexMap;
-use serde_json::Value;
+pub use serde_json::Value;
 
 pub mod ndjson;
 pub mod paths;

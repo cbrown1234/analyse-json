@@ -18,10 +18,8 @@ use std::io::{self, BufRead};
 use std::path::PathBuf;
 use std::time::Instant;
 
-use crate::json::ndjson::FileStats;
-use crate::json::ndjson::{
-    parse_ndjson_bufreader, parse_ndjson_file_path, process_json_iterable, Stats,
-};
+use crate::json::ndjson;
+use crate::json::ndjson::{parse_ndjson_bufreader, parse_ndjson_file_path, process_json_iterable};
 
 mod io_helpers;
 pub mod json;
@@ -114,7 +112,7 @@ fn get_bufreader(_args: &Cli, file_path: &std::path::PathBuf) -> Result<Box<dyn 
     }
 }
 
-fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<Stats> {
+fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<ndjson::Stats> {
     let errors = Errors::default();
 
     let json_iter = parse_ndjson_file_path(&settings.args, file_path, &errors)?;
@@ -127,7 +125,7 @@ fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<
     Ok(file_stats)
 }
 
-fn process_ndjson_file_path_par(settings: &Settings, file_path: &PathBuf) -> Result<Stats> {
+fn process_ndjson_file_path_par(settings: &Settings, file_path: &PathBuf) -> Result<ndjson::Stats> {
     let errors = ErrorsPar::default();
 
     let json_iter = parse_ndjson_bufreader_par(&settings.args, file_path, &errors)?;
@@ -183,7 +181,7 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
         for entry in glob(pattern)? {
             let file_path = entry?;
             println!("File '{}':", file_path.display());
-            let file_stats = FileStats::new(
+            let file_stats = ndjson::FileStats::new(
                 file_path.to_string_lossy().into_owned(),
                 process_ndjson_file_path(&settings, &file_path)?,
             );
@@ -195,7 +193,7 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
         }
         if settings.args.merge {
             println!("Overall Stats");
-            let overall_file_stats: Stats = file_stats_list.iter().sum();
+            let overall_file_stats: ndjson::Stats = file_stats_list.iter().sum();
             overall_file_stats.print()?;
         }
         return Ok(());
@@ -218,7 +216,7 @@ fn run_no_stdin_par(settings: Settings) -> Result<()> {
         for entry in glob(pattern)? {
             let file_path = entry?;
             println!("File '{}':", file_path.display());
-            let file_stats = FileStats::new(
+            let file_stats = ndjson::FileStats::new(
                 file_path.to_string_lossy().into_owned(),
                 process_ndjson_file_path_par(&settings, &file_path)?,
             );
@@ -230,7 +228,7 @@ fn run_no_stdin_par(settings: Settings) -> Result<()> {
         }
         if settings.args.merge {
             println!("Overall Stats");
-            let overall_file_stats: Stats = file_stats_list.iter().sum();
+            let overall_file_stats: ndjson::Stats = file_stats_list.iter().sum();
             overall_file_stats.print()?;
         }
         return Ok(());
