@@ -1,4 +1,6 @@
+// Re-exports
 pub use indexmap::IndexMap;
+pub use serde_json;
 pub use serde_json::Value;
 
 pub mod ndjson;

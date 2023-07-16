@@ -1,6 +1,5 @@
-use serde_json::{value::Index, Value};
-
-use super::{IndexMap, ValueType};
+use super::serde_json::value::Index;
+use super::{IndexMap, Value, ValueType};
 
 /// Wrapper around [`Value`] keeping track of its location within the root parent JSON
 #[derive(Debug, Clone, PartialEq, Eq)]
