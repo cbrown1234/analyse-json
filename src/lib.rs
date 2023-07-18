@@ -1,25 +1,18 @@
 use clap::CommandFactory;
 use clap::Parser;
 use clap_complete::Shell;
-use flate2::read::GzDecoder;
 use glob::glob;
 use grep_cli::is_readable_stdin;
 use humantime::format_duration;
-use json::ndjson::errors::collection::Errors;
-use json::ndjson::errors::collection::ErrorsPar;
-use json::ndjson::parse_ndjson_bufreader_par;
-use json::ndjson::parse_ndjson_receiver_par;
-use json::ndjson::process_json_iterable_par;
+use json::ndjson::JSONStats;
+use json::ndjson::StatsResult;
 use jsonpath_lib::Compiled;
 use std::error;
-use std::ffi::OsStr;
-use std::fs::File;
-use std::io::{self, BufRead};
+use std::io;
 use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::json::ndjson;
-use crate::json::ndjson::{parse_ndjson_bufreader, parse_ndjson_file_path, process_json_iterable};
 
 mod io_helpers;
 pub mod json;
@@ -101,68 +94,24 @@ impl Settings {
     }
 }
 
-fn get_bufreader(_args: &Cli, file_path: &std::path::PathBuf) -> Result<Box<dyn BufRead + Send>> {
-    let extension = file_path.extension().and_then(OsStr::to_str);
-    let file = File::open(file_path)?;
-    if extension == Some("gz") {
-        let file = GzDecoder::new(file);
-        Ok(Box::new(io::BufReader::new(file)))
-    } else {
-        Ok(Box::new(io::BufReader::new(file)))
-    }
-}
-
 fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<ndjson::Stats> {
-    let errors = Errors::default();
-
-    let json_iter = parse_ndjson_file_path(&settings.args, file_path, &errors)?;
-    let file_stats = process_json_iterable(settings, json_iter, &errors);
+    let StatsResult { stats, errors } = file_path.json_stats(settings)?;
 
     if !settings.args.quiet {
         errors.eprint();
     }
 
-    Ok(file_stats)
-}
-
-fn process_ndjson_file_path_par(settings: &Settings, file_path: &PathBuf) -> Result<ndjson::Stats> {
-    let errors = ErrorsPar::default();
-
-    let json_iter = parse_ndjson_bufreader_par(&settings.args, file_path, &errors)?;
-    let file_stats = process_json_iterable_par(settings, json_iter, &errors);
-
-    if !settings.args.quiet {
-        errors.eprint();
-    }
-
-    Ok(file_stats)
+    Ok(stats)
 }
 
 fn run_stdin(settings: Settings) -> Result<()> {
-    let stdin = io::stdin().lock();
-    let errors = Errors::default();
-    let json_iter = parse_ndjson_bufreader(&settings.args, stdin, &errors)?;
-    let stdin_stats = process_json_iterable(&settings, json_iter, &errors);
+    let StatsResult { stats, errors } = io::stdin().json_stats(&settings)?;
 
     if !settings.args.quiet {
         errors.eprint();
     }
 
-    stdin_stats.print()?;
-    Ok(())
-}
-
-fn run_stdin_par(settings: Settings) -> Result<()> {
-    let stdin = io_helpers::stdin::spawn_stdin_channel(1_000_000);
-    let errors = ErrorsPar::default();
-    let json_iter = parse_ndjson_receiver_par(&settings.args, stdin, &errors);
-    let stdin_stats = process_json_iterable_par(&settings, json_iter, &errors);
-
-    if !settings.args.quiet {
-        errors.eprint();
-    }
-
-    stdin_stats.print()?;
+    stats.print()?;
     Ok(())
 }
 
@@ -201,41 +150,6 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
     Ok(())
 }
 
-fn run_no_stdin_par(settings: Settings) -> Result<()> {
-    if let Some(file_path) = &settings.args.file_path {
-        let file_stats = process_ndjson_file_path_par(&settings, file_path)?;
-
-        file_stats.print()?;
-        return Ok(());
-    }
-
-    if let Some(pattern) = &settings.args.glob {
-        let mut file_stats_list = Vec::new();
-
-        println!("Glob '{}':", pattern);
-        for entry in glob(pattern)? {
-            let file_path = entry?;
-            println!("File '{}':", file_path.display());
-            let file_stats = ndjson::FileStats::new(
-                file_path.to_string_lossy().into_owned(),
-                process_ndjson_file_path_par(&settings, &file_path)?,
-            );
-
-            file_stats.stats.print()?;
-            if settings.args.merge {
-                file_stats_list.push(file_stats)
-            }
-        }
-        if settings.args.merge {
-            println!("Overall Stats");
-            let overall_file_stats: ndjson::Stats = file_stats_list.iter().sum();
-            overall_file_stats.print()?;
-        }
-        return Ok(());
-    }
-    Ok(())
-}
-
 fn print_completions(args: Cli) {
     let mut cmd = Cli::into_app();
     let shell = args
@@ -252,17 +166,11 @@ pub fn run(args: Cli) -> Result<()> {
         print_completions(settings.args);
         return Ok(());
     } else if is_readable_stdin() {
-        if settings.args.parallel {
-            run_stdin_par(settings)?;
-        } else {
-            run_stdin(settings)?;
-        }
+        run_stdin(settings)?;
     } else if settings.args == Cli::default() {
         let mut cmd = Cli::command();
         cmd.print_help()?;
         return Ok(());
-    } else if settings.args.parallel {
-        run_no_stdin_par(settings)?;
     } else {
         run_no_stdin(settings)?;
     }

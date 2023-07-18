@@ -1,12 +1,14 @@
 pub mod errors;
 pub mod stats;
 
+use crate::io_helpers::buf_reader::get_bufreader;
 use crate::json::paths::ValuePaths;
 use crate::json::{Value, ValueType};
-use crate::{get_bufreader, Cli, Settings};
+use crate::{io_helpers, Cli, Settings};
 
 use self::errors::collection::{
     Errors, ErrorsPar, IndexedNDJSONError, IntoEnumeratedErrFiltered, IntoErrFiltered,
+    NDJSONProcessingErrors,
 };
 use self::errors::NDJSONError;
 pub use self::stats::{FileStats, Stats};
@@ -70,6 +72,7 @@ pub fn parse_ndjson_receiver_par<'a>(
     parse_ndjson_iter_par(args, receiver, errors)
 }
 
+// TODO: rename or switch function args?
 // TODO: add or switch to method on `&PathBuf`?
 /// Indexes data from the file_path with a bufreader, converts it to serde JSON `Value`s
 /// and filters out data that does not
@@ -80,7 +83,7 @@ pub fn parse_ndjson_bufreader_par<'a>(
     args: &Cli,
     file_path: &PathBuf,
     errors: &'a NDJSONErrorsPar,
-) -> Result<impl ParallelIterator<Item = IdJSON> + 'a, Box<dyn Error>> {
+) -> Result<impl ParallelIterator<Item = IdJSON> + 'a, NDJSONError> {
     let reader = get_bufreader(args, file_path)?;
 
     let iter = reader.lines().enumerate();
@@ -146,7 +149,7 @@ pub fn parse_ndjson_bufreader<'a>(
     _args: &Cli,
     reader: impl BufRead + 'a,
     errors: &NDJSONErrors,
-) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
+) -> IdJSONIter<'a> {
     let json_iter = reader.lines();
 
     let json_iter = json_iter.to_enumerated_err_filtered(errors.new_ref());
@@ -159,7 +162,7 @@ pub fn parse_ndjson_bufreader<'a>(
     });
     let json_iter = json_iter.to_err_filtered(errors.new_ref());
 
-    Ok(Box::new(json_iter))
+    Box::new(json_iter)
 }
 
 /// Indexes data from the file, converts it to serde JSON `Value`s
@@ -167,11 +170,7 @@ pub fn parse_ndjson_bufreader<'a>(
 /// parse as JSON to the `errors` container. Single threaded.
 ///
 /// See also: [`parse_ndjson_bufreader`], [`parse_ndjson_file_path`] & [`parse_ndjson_receiver`]
-pub fn parse_ndjson_file<'a>(
-    args: &Cli,
-    file: File,
-    errors: &NDJSONErrors,
-) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
+pub fn parse_ndjson_file<'a>(args: &Cli, file: File, errors: &NDJSONErrors) -> IdJSONIter<'a> {
     let reader = io::BufReader::new(file);
     parse_ndjson_bufreader(args, reader, errors)
 }
@@ -185,9 +184,9 @@ pub fn parse_ndjson_file_path<'a>(
     args: &Cli,
     file_path: &PathBuf,
     errors: &NDJSONErrors,
-) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
+) -> Result<IdJSONIter<'a>, NDJSONError> {
     let reader = get_bufreader(args, file_path)?;
-    parse_ndjson_bufreader(args, reader, errors)
+    Ok(parse_ndjson_bufreader(args, reader, errors))
 }
 
 /// Handles the jsonpath query expansion of the Iterators values. Single threaded
@@ -446,6 +445,57 @@ where
     }
 }
 
+pub struct StatsResult {
+    pub stats: Stats,
+    pub errors: Box<dyn NDJSONProcessingErrors>,
+}
+
+pub trait JSONStats {
+    fn json_stats(self, settings: &Settings) -> Result<StatsResult, NDJSONError>;
+}
+
+// TODO: Add tests
+impl JSONStats for io::Stdin {
+    fn json_stats(self, settings: &Settings) -> Result<StatsResult, NDJSONError> {
+        let stats;
+        let errors: Box<dyn NDJSONProcessingErrors>;
+        if settings.args.parallel {
+            let stdin = io_helpers::stdin::spawn_stdin_channel(self, 1_000_000);
+            let _errors = ErrorsPar::default();
+            let json_iter = parse_ndjson_receiver_par(&settings.args, stdin, &_errors);
+            stats = process_json_iterable_par(settings, json_iter, &_errors);
+            errors = Box::new(_errors);
+        } else {
+            let stdin = self.lock();
+            let _errors = Errors::default();
+            let json_iter = parse_ndjson_bufreader(&settings.args, stdin, &_errors);
+            stats = process_json_iterable(settings, json_iter, &_errors);
+            errors = Box::new(_errors);
+        }
+        Ok(StatsResult { stats, errors })
+    }
+}
+
+// TODO: Add tests
+impl JSONStats for &PathBuf {
+    fn json_stats(self, settings: &Settings) -> Result<StatsResult, NDJSONError> {
+        let stats;
+        let errors: Box<dyn NDJSONProcessingErrors>;
+        if settings.args.parallel {
+            let _errors = ErrorsPar::default();
+            let json_iter = parse_ndjson_bufreader_par(&settings.args, self, &_errors)?;
+            stats = process_json_iterable_par(settings, json_iter, &_errors);
+            errors = Box::new(_errors);
+        } else {
+            let _errors = Errors::default();
+            let json_iter = parse_ndjson_file_path(&settings.args, self, &_errors)?;
+            stats = process_json_iterable(settings, json_iter, &_errors);
+            errors = Box::new(_errors);
+        }
+        Ok(StatsResult { stats, errors })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::json::IndexMap;
@@ -473,7 +523,7 @@ mod tests {
         let args = Cli::default();
         let errors = Errors::default();
 
-        let json_iter = parse_ndjson_bufreader(&args, reader, &errors).unwrap();
+        let json_iter = parse_ndjson_bufreader(&args, reader, &errors);
         assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
         assert!(errors.container.borrow().is_empty())
     }
@@ -495,7 +545,7 @@ mod tests {
         let args = Cli::default();
         let errors = Errors::default();
 
-        let json_iter = parse_ndjson_bufreader(&args, reader, &errors).unwrap();
+        let json_iter = parse_ndjson_bufreader(&args, reader, &errors);
         assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
         assert!(errors.container.borrow().len() == 1)
     }

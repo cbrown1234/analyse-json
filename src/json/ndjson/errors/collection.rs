@@ -71,8 +71,13 @@ impl<E: Display> fmt::Display for ErrorsPar<E> {
     }
 }
 
-impl<E: Display> ErrorsPar<E> {
-    pub fn eprint(&self) {
+// TODO: Consider blend with ErrorsContainer Trait?
+pub trait NDJSONProcessingErrors {
+    fn eprint(&self) {}
+}
+
+impl<E: Display> NDJSONProcessingErrors for ErrorsPar<E> {
+    fn eprint(&self) {
         let stream = Stream::Stdout;
         if !self.container.lock().unwrap().is_empty() {
             eprintln!("{}", self.if_supports_color(stream, |text| text.red()));
@@ -104,8 +109,8 @@ impl<E> Errors<E> {
     }
 }
 
-impl<E: Display> Errors<E> {
-    pub fn eprint(&self) {
+impl<E: Display> NDJSONProcessingErrors for Errors<E> {
+    fn eprint(&self) {
         let stream = Stream::Stdout;
         if !self.container.borrow().is_empty() {
             eprintln!("{}", self.if_supports_color(stream, |text| text.red()));
