@@ -476,7 +476,6 @@ impl JSONStats for io::Stdin {
     }
 }
 
-// TODO: Add tests
 impl JSONStats for &PathBuf {
     fn json_stats(self, settings: &Settings) -> Result<StatsResult, NDJSONError> {
         let stats;
@@ -504,6 +503,67 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::{Seek, SeekFrom, Write};
+
+    #[test]
+    fn simple_json_stats() {
+        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
+        writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
+        writeln!(tmpfile, r#"{{"key2": 123}}"#).unwrap();
+        writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
+        tmpfile.seek(SeekFrom::Start(0)).unwrap();
+        let path = tmpfile.path().to_path_buf();
+
+        let expected = StatsResult {
+            stats: Stats {
+                keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
+                line_count: 3,
+                bad_lines: vec![],
+                keys_types_count: IndexMap::from([
+                    ("$.key1::Number".to_string(), 2),
+                    ("$.key2::Number".to_string(), 1),
+                ]),
+                empty_lines: vec![],
+            },
+            errors: Box::new(Errors::<NDJSONError>::default()),
+        };
+
+        let args = Cli::default();
+        let settings = Settings::init(args).unwrap();
+
+        let actual = path.json_stats(&settings).unwrap();
+        assert_eq!(expected.stats, actual.stats);
+    }
+
+    #[test]
+    fn simple_json_stats_par() {
+        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
+        writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
+        writeln!(tmpfile, r#"{{"key2": 123}}"#).unwrap();
+        writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
+        tmpfile.seek(SeekFrom::Start(0)).unwrap();
+        let path = tmpfile.path().to_path_buf();
+
+        let expected = StatsResult {
+            stats: Stats {
+                keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
+                line_count: 3,
+                bad_lines: vec![],
+                keys_types_count: IndexMap::from([
+                    ("$.key1::Number".to_string(), 2),
+                    ("$.key2::Number".to_string(), 1),
+                ]),
+                empty_lines: vec![],
+            },
+            errors: Box::new(Errors::<NDJSONErrorsPar>::default()),
+        };
+
+        let mut args = Cli::default();
+        args.parallel = true;
+        let settings = Settings::init(args).unwrap();
+
+        let actual = path.json_stats(&settings).unwrap();
+        assert_eq!(expected.stats, actual.stats);
+    }
 
     #[test]
     fn simple_ndjson() {
