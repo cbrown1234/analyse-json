@@ -139,40 +139,38 @@ pub struct ErrFiltered<I, E> {
     errors: Errors<E>,
 }
 
-impl<E, T, I: Iterator<Item = (String, Result<T, W>)>, W> ErrFiltered<I, E> {
+impl<U, E, T, I: Iterator<Item = (U, Result<T, W>)>, W> ErrFiltered<I, E> {
     pub fn new(iter: I, errors: Errors<E>) -> Self {
         Self { iter, errors }
     }
 }
 
-impl<T, I> Iterator for ErrFiltered<I, IndexedNDJSONError>
-where
-    I: Iterator<Item = (String, Result<T, serde_json::Error>)>,
+impl<U: Display, T, I: Iterator<Item = (U, Result<T, impl Into<NDJSONError>>)>> Iterator
+    for ErrFiltered<I, IndexedNDJSONError>
 {
-    type Item = (String, T);
+    type Item = (U, T);
     fn next(&mut self) -> Option<Self::Item> {
         loop {
             let (id, next_item) = self.iter.next()?;
             match next_item {
                 Ok(item) => break Some((id, item)),
                 Err(e) => {
-                    self.errors.push(IndexedNDJSONError::new(
-                        id,
-                        NDJSONError::JSONParsingError(e),
-                    ));
+                    let error: NDJSONError = e.into();
+                    self.errors
+                        .push(IndexedNDJSONError::new(format!("{id}"), error));
                 }
             }
         }
     }
 }
 
-pub trait IntoErrFiltered<E, T, W>: Iterator<Item = (String, Result<T, W>)> + Sized {
+pub trait IntoErrFiltered<U, E, T, W>: Iterator<Item = (U, Result<T, W>)> + Sized {
     fn to_err_filtered(self, errors: Errors<E>) -> ErrFiltered<Self, E> {
         ErrFiltered::new(self, errors)
     }
 }
 
-impl<E, T, I: Iterator<Item = (String, Result<T, W>)>, W> IntoErrFiltered<E, T, W> for I {}
+impl<U, E, T, I: Iterator<Item = (U, Result<T, W>)>, W> IntoErrFiltered<U, E, T, W> for I {}
 
 /// Iterator that enumerates all items and skips, but keeps track of, `Err`s while processing
 pub struct EnumeratedErrFiltered<I, E> {

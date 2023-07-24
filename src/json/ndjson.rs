@@ -26,11 +26,29 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
 
 // Reusable types for function signatures
+type IJSONCandidateResult = (usize, Result<String, io::Error>);
 type IJSONCandidate = (usize, String);
 type IdJSON = (String, Value);
 type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
 type NDJSONErrors = Errors<IndexedNDJSONError>;
 type NDJSONErrorsPar = ErrorsPar<IndexedNDJSONError>;
+
+// Should these return a struct?
+pub trait IndexedString {
+    fn to_indexed_strings(self) -> Box<dyn Iterator<Item = IJSONCandidateResult>>;
+}
+
+impl IndexedString for Receiver<String> {
+    fn to_indexed_strings(self) -> Box<dyn Iterator<Item = IJSONCandidateResult>> {
+        Box::new(self.into_iter().enumerate().map(|(i, s)| (i + 1, Ok(s))))
+    }
+}
+
+impl IndexedString for Box<dyn BufRead> {
+    fn to_indexed_strings(self) -> Box<dyn Iterator<Item = IJSONCandidateResult>> {
+        Box::new(self.lines().enumerate().map(|(i, s)| (i + 1, s)))
+    }
+}
 
 // TODO: add or switch to method on `Receiver<String>`?
 /// Indexes data from the mpsc channel, converts it to serde JSON `Value`s and filters out data that does not
@@ -39,18 +57,19 @@ type NDJSONErrorsPar = ErrorsPar<IndexedNDJSONError>;
 /// See also: [`parse_ndjson_receiver_par`]
 pub fn parse_ndjson_receiver<'a>(
     _args: &Cli,
-    receiver: &'a Receiver<String>,
+    receiver: Receiver<String>,
     errors: &NDJSONErrors,
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
-    let json_iter = receiver.iter();
-
-    let json_iter = json_iter.enumerate().map(|(i, json_candidate)| {
-        (
-            (i + 1).to_string(),
-            serde_json::from_str::<Value>(&json_candidate),
-        )
-    });
-    let json_iter = json_iter.to_err_filtered(errors.new_ref());
+    let json_iter = receiver
+        .to_indexed_strings()
+        .to_err_filtered(errors.new_ref())
+        .map(|(i, json_candidate)| {
+            (
+                i.to_string(),
+                serde_json::from_str::<Value>(&json_candidate),
+            )
+        })
+        .to_err_filtered(errors.new_ref());
 
     Ok(Box::new(json_iter))
 }
@@ -503,6 +522,30 @@ mod tests {
     use super::*;
     use std::fs::File;
     use std::io::{Seek, SeekFrom, Write};
+
+    // TODO: How to test stdin?
+
+    #[test]
+    fn line_read() {
+        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
+        writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
+        writeln!(tmpfile, r#"{{"key2": 123}}"#).unwrap();
+        tmpfile.seek(SeekFrom::Start(0)).unwrap();
+        let path = tmpfile.path().to_path_buf();
+
+        let args = Cli::default();
+        let buf_reader: Box<dyn BufRead> = get_bufreader(&args, &path).unwrap();
+        let mut indexed = buf_reader.to_indexed_strings();
+
+        let (i, s) = indexed.next().unwrap();
+        assert_eq!(1, i);
+        assert_eq!(r#"{"key1": 123}"#.to_string(), s.unwrap());
+        let (i, s) = indexed.next().unwrap();
+        assert_eq!(2, i);
+        assert_eq!(r#"{"key2": 123}"#.to_string(), s.unwrap());
+
+        assert!(indexed.next().is_none());
+    }
 
     #[test]
     fn simple_json_stats() {
