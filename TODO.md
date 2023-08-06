@@ -26,3 +26,4 @@
 - ~~Shell completion support~~
   - ~~Runtime creation~~
   - Build time creating
+- CI/CD on github
