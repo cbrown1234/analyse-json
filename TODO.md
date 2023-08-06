@@ -27,3 +27,5 @@
   - ~~Runtime creation~~
   - Build time creating
 - CI/CD on github
+- Review for comparison / reuse:
+  - https://github.com/v0ldek/rsonpath
