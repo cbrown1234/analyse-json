@@ -15,7 +15,7 @@
     - ~~https://github.com/jmespath/jmespath.rs~~
     - ~~https://github.com/onelson/jq-rs~~
     - https://github.com/hiltontj/serde_json_path
-    - https://github.com/v0ldek/rsonpath
+    - https://github.com/V0ldek/rsonpath/tree/main/crates/rsonpath-lib
   - ~~Wrapper to keep track of source lines for 0/1 to many queries?~~
 - ~~Refactor to implementation using iterator adapters~~ (First pass done, need some improvement)
   - consider itertools::process_results as a top level runner
