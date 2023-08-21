@@ -33,19 +33,25 @@ type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
 type NDJSONErrors = Errors<IndexedNDJSONError>;
 type NDJSONErrorsPar = ErrorsPar<IndexedNDJSONError>;
 
-// Should these return a struct?
-pub trait IndexedString {
-    fn to_indexed_strings(self) -> Box<dyn Iterator<Item = IJSONCandidateResult>>;
+// Should these return a struct (like enumerate)?
+pub trait Indexed<'a> {
+    type Item;
+
+    fn indexed(self) -> Box<dyn Iterator<Item = (usize, Self::Item)> + 'a>;
 }
 
-impl IndexedString for Receiver<String> {
-    fn to_indexed_strings(self) -> Box<dyn Iterator<Item = IJSONCandidateResult>> {
-        Box::new(self.into_iter().enumerate().map(|(i, s)| (i + 1, Ok(s))))
+impl<'a, T: 'a> Indexed<'a> for Receiver<T> {
+    type Item = T;
+
+    fn indexed(self) -> Box<dyn Iterator<Item = (usize, Self::Item)> + 'a> {
+        Box::new(self.into_iter().enumerate().map(|(i, s)| (i + 1, s)))
     }
 }
 
-impl IndexedString for Box<dyn BufRead> {
-    fn to_indexed_strings(self) -> Box<dyn Iterator<Item = IJSONCandidateResult>> {
+impl<'a> Indexed<'a> for Box<dyn BufRead> {
+    type Item = Result<String, io::Error>;
+
+    fn indexed(self) -> Box<dyn Iterator<Item = IJSONCandidateResult>> {
         Box::new(self.lines().enumerate().map(|(i, s)| (i + 1, s)))
     }
 }
@@ -61,8 +67,7 @@ pub fn parse_ndjson_receiver<'a>(
     errors: &NDJSONErrors,
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
     let json_iter = receiver
-        .to_indexed_strings()
-        .to_err_filtered(errors.new_ref())
+        .indexed()
         .map(|(i, json_candidate)| {
             (
                 i.to_string(),
@@ -535,7 +540,7 @@ mod tests {
 
         let args = Cli::default();
         let buf_reader: Box<dyn BufRead> = get_bufreader(&args, &path).unwrap();
-        let mut indexed = buf_reader.to_indexed_strings();
+        let mut indexed = buf_reader.indexed();
 
         let (i, s) = indexed.next().unwrap();
         assert_eq!(1, i);
