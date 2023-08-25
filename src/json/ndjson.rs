@@ -21,40 +21,29 @@ use rayon::prelude::ParallelIterator;
 use std::error::Error;
 use std::fs::File;
 use std::io::{self, prelude::*};
+use std::iter::Zip;
+use std::ops::RangeFrom;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
 
 // Reusable types for function signatures
-type IJSONCandidateResult = (usize, Result<String, io::Error>);
 type IJSONCandidate = (usize, String);
 type IdJSON = (String, Value);
 type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
 type NDJSONErrors = Errors<IndexedNDJSONError>;
 type NDJSONErrorsPar = ErrorsPar<IndexedNDJSONError>;
 
-// Should these return a struct (like enumerate)?
-pub trait Indexed<'a> {
-    type Item;
-
-    fn indexed(self) -> Box<dyn Iterator<Item = (usize, Self::Item)> + 'a>;
-}
-
-impl<'a, T: 'a> Indexed<'a> for Receiver<T> {
-    type Item = T;
-
-    fn indexed(self) -> Box<dyn Iterator<Item = (usize, Self::Item)> + 'a> {
-        Box::new(self.into_iter().enumerate().map(|(i, s)| (i + 1, s)))
+trait Indexed: Iterator {
+    fn indexed(self) -> Zip<RangeFrom<usize>, Self>
+    where
+        Self: Sized,
+    {
+        (1usize..).zip(self)
     }
 }
 
-impl<'a> Indexed<'a> for Box<dyn BufRead> {
-    type Item = Result<String, io::Error>;
-
-    fn indexed(self) -> Box<dyn Iterator<Item = IJSONCandidateResult>> {
-        Box::new(self.lines().enumerate().map(|(i, s)| (i + 1, s)))
-    }
-}
+impl<T> Indexed for T where T: Iterator {}
 
 // TODO: add or switch to method on `Receiver<String>`?
 /// Indexes data from the mpsc channel, converts it to serde JSON `Value`s and filters out data that does not
@@ -67,6 +56,7 @@ pub fn parse_ndjson_receiver<'a>(
     errors: &NDJSONErrors,
 ) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
     let json_iter = receiver
+        .into_iter()
         .indexed()
         .map(|(i, json_candidate)| {
             (
@@ -89,10 +79,7 @@ pub fn parse_ndjson_receiver_par<'a>(
     receiver: Receiver<String>,
     errors: &'a NDJSONErrorsPar,
 ) -> impl ParallelIterator<Item = IdJSON> + 'a {
-    let receiver = receiver
-        .into_iter()
-        .enumerate()
-        .map(|(i, json_candidate)| (i + 1, json_candidate));
+    let receiver = receiver.into_iter().indexed();
     parse_ndjson_iter_par(args, receiver, errors)
 }
 
@@ -363,6 +350,7 @@ pub fn process_json_iterable(
         let IndexedNDJSONError { location, error } = indexed_error;
         let location = location.to_owned();
         match error {
+            // TODO: use or syntax here?
             NDJSONError::JSONParsingError(_) => fs.bad_lines.push(location),
             NDJSONError::EmptyQuery => fs.empty_lines.push(location),
             NDJSONError::QueryJsonPathError(_) => fs.bad_lines.push(location),
@@ -540,7 +528,7 @@ mod tests {
 
         let args = Cli::default();
         let buf_reader: Box<dyn BufRead> = get_bufreader(&args, &path).unwrap();
-        let mut indexed = buf_reader.indexed();
+        let mut indexed = buf_reader.lines().indexed();
 
         let (i, s) = indexed.next().unwrap();
         assert_eq!(1, i);
