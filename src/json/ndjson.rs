@@ -208,23 +208,14 @@ pub fn expand_jsonpath_query<'a>(
     json_iter: impl Iterator<Item = IdJSON> + 'a,
     errors: &NDJSONErrors,
 ) -> IdJSONIter<'a> {
-    let select_errors = errors.new_ref();
     let missing = errors.new_ref();
     let json_iter_out: IdJSONIter<'a>;
     if let Some(ref selector) = settings.jsonpath_selector {
         let path = settings.args.jsonpath.to_owned();
         let path = path.expect("must exist for jsonpath_selector to exist");
         let expanded = json_iter.flat_map(move |(ref id, ref json)| {
-            let mut select_errored = false;
-            let selected = selector.select(json).unwrap_or_else(|e| {
-                select_errors.push(IndexedNDJSONError::new(
-                    id.to_owned(),
-                    NDJSONError::QueryJsonPathError(e),
-                ));
-                select_errored = true;
-                vec![]
-            });
-            if selected.is_empty() && !select_errored {
+            let selected = selector.query(json);
+            if selected.is_empty() {
                 missing.push(IndexedNDJSONError::new(
                     id.to_owned(),
                     NDJSONError::EmptyQuery,
@@ -251,7 +242,6 @@ pub fn expand_jsonpath_query_par<'a>(
     json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
     errors: &NDJSONErrorsPar,
 ) -> impl ParallelIterator<Item = IdJSON> + 'a {
-    let select_errors = errors.new_ref();
     let missing = errors.new_ref();
 
     json_iter.flat_map(move |(id, json)| {
@@ -259,16 +249,8 @@ pub fn expand_jsonpath_query_par<'a>(
             let path = settings.args.jsonpath.to_owned();
             let path = path.expect("must exist for jsonpath_selector to exist");
 
-            let mut select_errored = false;
-            let selected = selector.select(&json).unwrap_or_else(|e| {
-                select_errors.push(IndexedNDJSONError::new(
-                    id.to_owned(),
-                    NDJSONError::QueryJsonPathError(e),
-                ));
-                select_errored = true;
-                vec![]
-            });
-            if selected.is_empty() && !select_errored {
+            let selected = selector.query(&json);
+            if selected.is_empty() {
                 missing.push(IndexedNDJSONError::new(
                     id.to_owned(),
                     NDJSONError::EmptyQuery,
@@ -353,7 +335,6 @@ pub fn process_json_iterable(
             // TODO: use or syntax here?
             NDJSONError::JSONParsingError(_) => fs.bad_lines.push(location),
             NDJSONError::EmptyQuery => fs.empty_lines.push(location),
-            NDJSONError::QueryJsonPathError(_) => fs.bad_lines.push(location),
             NDJSONError::IOError(_) => fs.bad_lines.push(location),
         }
     }
@@ -407,7 +388,6 @@ pub fn process_json_iterable_par<'a>(
         match error {
             NDJSONError::JSONParsingError(_) => fs.bad_lines.push(location),
             NDJSONError::EmptyQuery => fs.empty_lines.push(location),
-            NDJSONError::QueryJsonPathError(_) => fs.bad_lines.push(location),
             NDJSONError::IOError(_) => fs.bad_lines.push(location),
         }
     }

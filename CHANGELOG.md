@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Changed
+- Switched to `serde_json_path` for JSON path querying
+
 ## [0.5.5] - 2023-07-12
 
 ### Added

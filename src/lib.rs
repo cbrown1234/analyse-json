@@ -6,7 +6,7 @@ use grep_cli::is_readable_stdin;
 use humantime::format_duration;
 use json::ndjson::JSONStats;
 use json::ndjson::StatsResult;
-use jsonpath_lib::Compiled;
+use serde_json_path::JsonPath;
 use std::error;
 use std::io;
 use std::path::PathBuf;
@@ -67,10 +67,10 @@ pub struct Cli {
 }
 
 impl Cli {
-    fn jsonpath_selector(&self) -> Result<Option<Compiled>> {
+    fn jsonpath_selector(&self) -> Result<Option<JsonPath>> {
         let jsonpath_selector = if let Some(jsonpath) = &self.jsonpath {
-            let selector = Compiled::compile(jsonpath)?;
-            Some(selector)
+            let path = JsonPath::parse(jsonpath)?;
+            Some(path)
         } else {
             None
         };
@@ -81,7 +81,7 @@ impl Cli {
 /// Wrapper around [`Cli`] to hold derived attributes
 pub struct Settings {
     args: Cli,
-    jsonpath_selector: Option<Compiled>,
+    jsonpath_selector: Option<JsonPath>,
 }
 
 impl Settings {

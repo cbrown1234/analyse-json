@@ -11,6 +11,4 @@ pub enum NDJSONError {
     JSONParsingError(#[from] serde_json::Error),
     #[error("line returned empty for ther given query")]
     EmptyQuery,
-    #[error("line failed due to a JsonPath Query error")]
-    QueryJsonPathError(#[from] jsonpath_lib::JsonPathError),
 }
