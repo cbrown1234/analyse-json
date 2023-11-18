@@ -1,3 +1,4 @@
+use anyhow::{Context, Result};
 use clap::CommandFactory;
 use clap::Parser;
 use clap_complete::Shell;
@@ -7,7 +8,6 @@ use humantime::format_duration;
 use json::ndjson::JSONStats;
 use json::ndjson::StatsResult;
 use serde_json_path::JsonPath;
-use std::error;
 use std::io;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -16,8 +16,6 @@ use crate::json::ndjson;
 
 mod io_helpers;
 pub mod json;
-
-type Result<T> = ::std::result::Result<T, Box<dyn error::Error>>;
 
 #[derive(Parser, Default, PartialEq, Eq)]
 #[clap(author, version, about, long_about = None)]
@@ -69,7 +67,8 @@ pub struct Cli {
 impl Cli {
     fn jsonpath_selector(&self) -> Result<Option<JsonPath>> {
         let jsonpath_selector = if let Some(jsonpath) = &self.jsonpath {
-            let path = JsonPath::parse(jsonpath)?;
+            let path = JsonPath::parse(jsonpath)
+                .with_context(|| format!("Failed to parse jsonpath query string: {jsonpath}"))?;
             Some(path)
         } else {
             None
@@ -95,7 +94,12 @@ impl Settings {
 }
 
 fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<ndjson::Stats> {
-    let StatsResult { stats, errors } = file_path.json_stats(settings)?;
+    let StatsResult { stats, errors } = file_path.json_stats(settings).with_context(|| {
+        format!(
+            "Failed to collect stats for JSON file: {}",
+            file_path.display()
+        )
+    })?;
 
     if !settings.args.quiet {
         errors.eprint();
@@ -105,7 +109,9 @@ fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<
 }
 
 fn run_stdin(settings: Settings) -> Result<()> {
-    let StatsResult { stats, errors } = io::stdin().json_stats(&settings)?;
+    let StatsResult { stats, errors } = io::stdin()
+        .json_stats(&settings)
+        .context("Failed to collect stats for JSON stdin")?;
 
     if !settings.args.quiet {
         errors.eprint();
@@ -127,7 +133,10 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
         let mut file_stats_list = Vec::new();
 
         println!("Glob '{}':", pattern);
-        for entry in glob(pattern)? {
+        let file_paths = glob(pattern).context(
+            "Failed to parse glob pattern, try quoting '<pattern>' to avoid shell parsing",
+        )?;
+        for entry in file_paths {
             let file_path = entry?;
             println!("File '{}':", file_path.display());
             let file_stats = ndjson::FileStats::new(
@@ -135,7 +144,9 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
                 process_ndjson_file_path(&settings, &file_path)?,
             );
 
-            file_stats.stats.print()?;
+            file_stats.stats.print().with_context(|| {
+                format!("Failed to print stats for file: {}", file_path.display())
+            })?;
             if settings.args.merge {
                 file_stats_list.push(file_stats)
             }
@@ -143,7 +154,9 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
         if settings.args.merge {
             println!("Overall Stats");
             let overall_file_stats: ndjson::Stats = file_stats_list.iter().sum();
-            overall_file_stats.print()?;
+            overall_file_stats
+                .print()
+                .context("Failed to print combined stats")?;
         }
         return Ok(());
     }
@@ -161,18 +174,18 @@ fn print_completions(args: Cli) {
 
 pub fn run(args: Cli) -> Result<()> {
     let now = Instant::now();
-    let settings = Settings::init(args)?;
+    let settings = Settings::init(args).context("Failed to initialise settings from CLI args")?;
     if settings.args.generate_completions.is_some() {
         print_completions(settings.args);
         return Ok(());
     } else if is_readable_stdin() {
-        run_stdin(settings)?;
+        run_stdin(settings).context("Failed to process stdin")?;
     } else if settings.args == Cli::default() {
         let mut cmd = Cli::command();
-        cmd.print_help()?;
+        cmd.print_help().context("Failed to pring CLI help")?;
         return Ok(());
     } else {
-        run_no_stdin(settings)?;
+        run_no_stdin(settings).context("Failed to process file(s)")?;
     }
     eprintln!("Completed in {}", format_duration(now.elapsed()));
     Ok(())
