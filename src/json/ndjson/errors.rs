@@ -9,6 +9,6 @@ pub enum NDJSONError {
     IOError(#[from] std::io::Error),
     #[error("Line failed to parse as valid JSON")]
     JSONParsingError(#[from] serde_json::Error),
-    #[error("Line returned empty for ther given query")]
+    #[error("Line returned empty for the given query")]
     EmptyQuery,
 }

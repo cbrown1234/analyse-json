@@ -10,6 +10,9 @@ All notable changes to this project will be documented in this file.
 - Switched to `serde_json_path` for JSON path querying
 - Added anyhow for error handling
 
+### Fixed
+- Typo in error message
+
 ## [0.5.5] - 2023-07-12
 
 ### Added
