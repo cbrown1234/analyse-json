@@ -25,7 +25,7 @@ exclude = [
 [dependencies]
 serde_json = "1.0"
 itertools = "0.10.5"
-clap = { version = "3.2.23", features = ["derive"] }
+clap = { version = "4", features = ["derive"] }
 glob = "0.3"
 indexmap = { version = "1.9.2", features = ["serde"] }
 rayon = "1.6"
@@ -35,7 +35,7 @@ flate2 = "1"
 grep-cli = "0.1"
 owo-colors = { version = "3", features = ["supports-colors"]}
 serde = { version = "1.0", features = ["derive"] }
-clap_complete = "3"
+clap_complete = "4"
 indicatif = { version = "0.17.5", features = ["rayon"] }
 log = "0.4.19"
 env_logger = "0.10.0"

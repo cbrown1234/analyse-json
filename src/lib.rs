@@ -1,4 +1,6 @@
 use anyhow::{Context, Result};
+use clap::builder::styling::AnsiColor;
+use clap::builder::Styles;
 use clap::CommandFactory;
 use clap::Parser;
 use clap_complete::Shell;
@@ -17,8 +19,16 @@ use crate::json::ndjson;
 mod io_helpers;
 pub mod json;
 
+fn styles() -> Styles {
+    Styles::styled()
+        .header(AnsiColor::Yellow.on_default())
+        .usage(AnsiColor::Green.on_default())
+        .literal(AnsiColor::Green.on_default())
+        .placeholder(AnsiColor::Green.on_default())
+}
+
 #[derive(Parser, Default, PartialEq, Eq)]
-#[clap(author, version, about, long_about = None)]
+#[clap(author, version, about, long_about = None, styles = styles())]
 pub struct Cli {
     /// File to process, expected to contain a single JSON object or Newline Delimited (ND) JSON objects
     #[clap(value_parser)]
@@ -44,7 +54,7 @@ pub struct Cli {
     /// Walk the elements of arrays treating arrays like a map of their enumerated elements?
     /// (E.g. $.path.to.array[0], $.path.to.array[1], ...)
     /// See also `--inspect-arrays`
-    #[clap(long, conflicts_with = "inspect-arrays")]
+    #[clap(long, conflicts_with = "inspect_arrays")]
     explode_arrays: bool,
 
     /// Include combined results for all files when using glob
@@ -164,7 +174,7 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
 }
 
 fn print_completions(args: Cli) {
-    let mut cmd = Cli::into_app();
+    let mut cmd = Cli::command();
     let shell = args
         .generate_completions
         .expect("function only called when argument specified");
@@ -193,6 +203,5 @@ pub fn run(args: Cli) -> Result<()> {
 
 #[test]
 fn verify_cli() {
-    use clap::CommandFactory;
     Cli::command().debug_assert()
 }

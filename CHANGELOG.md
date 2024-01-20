@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 - Switched to `serde_json_path` for JSON path querying
 - Added anyhow for error handling
 - Enforce mutually exclusive array handling options
+- Updated to clap v4
 
 ### Fixed
 - Typo in error message
