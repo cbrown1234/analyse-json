@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Changed
+- Update README
+
 ## [0.6.0] - 2024-01-20
 
 ### Changed
