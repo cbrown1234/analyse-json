@@ -1,7 +1,7 @@
-use grep_cli::is_tty_stdout;
 use owo_colors::{OwoColorize, Stream};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::io::IsTerminal;
 use std::iter::Sum;
 use std::ops::Add;
 
@@ -80,7 +80,7 @@ impl fmt::Display for Stats {
 
 impl Stats {
     pub fn print(&self) -> std::result::Result<(), serde_json::Error> {
-        if is_tty_stdout() {
+        if std::io::stdout().is_terminal() {
             println!("{}", self);
             Ok(())
         } else {
