@@ -6,6 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+## [0.6.0] - 2024-01-20
+
 ### Changed
 - Switched to `serde_json_path` for JSON path querying
 - Added anyhow for error handling
@@ -104,7 +106,8 @@ All notable changes to this project will be documented in this file.
 Initial Release
 
 <!-- next-url -->
-[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.5.5...HEAD
+[Unreleased]: https://github.com/cbrown1234/analyse-json/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/cbrown1234/analyse-json/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/cbrown1234/analyse-json/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/cbrown1234/analyse-json/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/cbrown1234/analyse-json/compare/v0.5.2...v0.5.3
