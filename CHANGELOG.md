@@ -11,6 +11,7 @@ All notable changes to this project will be documented in this file.
 - Added anyhow for error handling
 - Enforce mutually exclusive array handling options
 - Updated to clap v4
+- Updated dependencies
 
 ### Fixed
 - Typo in error message
