@@ -2,9 +2,10 @@ pub mod errors;
 pub mod stats;
 
 use crate::io_helpers::buf_reader::get_bufreader;
+use crate::io_helpers::stdin::ToChannelReceiver;
 use crate::json::paths::ValuePaths;
 use crate::json::{Value, ValueType};
-use crate::{io_helpers, Cli, Settings};
+use crate::{Cli, Settings};
 
 use self::errors::collection::{
     Errors, ErrorsPar, IndexedNDJSONError, IntoEnumeratedErrFiltered, IntoErrFiltered,
@@ -452,7 +453,7 @@ impl JSONStats for io::Stdin {
         let stats;
         let errors: Box<dyn NDJSONProcessingErrors>;
         if settings.args.parallel {
-            let stdin = io_helpers::stdin::spawn_stdin_channel(self, 1_000_000);
+            let stdin = self.to_channel_receiver(1_000_000);
             let _errors = ErrorsPar::default();
             let json_iter = parse_ndjson_receiver_par(&settings.args, stdin, &_errors);
             stats = process_json_iterable_par(settings, json_iter, &_errors);

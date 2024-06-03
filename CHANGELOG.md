@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Corrected MSRV
+- Clippy lints
 
 ## [0.6.1] - 2024-01-20
 
