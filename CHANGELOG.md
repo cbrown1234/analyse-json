@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Fixed
+
+- Corrected MSRV
+
 ## [0.6.1] - 2024-01-20
 
 ### Changed
