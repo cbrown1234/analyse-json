@@ -53,7 +53,7 @@ trait ToNDJSON<'a> {
 }
 
 trait ToNDJSONPar<'a>: ToNDJSON<'a> {
-    fn parse_ndjson_par(self) -> impl ParallelIterator<Item = IdJSONResult> + 'a;
+    fn parse_ndjson_par(self, args: &Cli) -> impl ParallelIterator<Item = IdJSONResult> + 'a;
 }
 
 trait ProcessesNDJSON<'a> {
@@ -77,6 +77,24 @@ impl<'a, T: IntoIterator<Item = io::Result<String>> + 'a> ToNDJSON<'a> for T {
                         .and_then(|jc| serde_json::from_str::<Value>(&jc).map_err(|e| e.into())),
                 )
             })
+    }
+}
+
+impl<'a, T: Iterator<Item = io::Result<String>> + Send + 'a> ToNDJSONPar<'a> for T {
+    fn parse_ndjson_par(self, args: &Cli) -> impl ParallelIterator<Item = IdJSONResult> + 'a {
+        let iter = self
+            .into_iter()
+            .map(|result| result.map_err(|e| e.into()))
+            .indexed()
+            .take(args.lines.unwrap_or(usize::MAX));
+
+        iter.par_bridge().map(|(i, json_candidate)| {
+            (
+                i.to_string(),
+                json_candidate
+                    .and_then(|jc| serde_json::from_str::<Value>(&jc).map_err(|e| e.into())),
+            )
+        })
     }
 }
 
