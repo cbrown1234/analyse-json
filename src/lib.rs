@@ -8,7 +8,6 @@ use glob::glob;
 use grep_cli::is_readable_stdin;
 use humantime::format_duration;
 use json::ndjson::JSONStats;
-use json::ndjson::StatsResult;
 use serde_json_path::JsonPath;
 use std::io;
 use std::path::PathBuf;
@@ -104,28 +103,20 @@ impl Settings {
 }
 
 fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<ndjson::Stats> {
-    let StatsResult { stats, errors } = file_path.json_stats(settings).with_context(|| {
+    let stats = file_path.json_stats(settings).with_context(|| {
         format!(
             "Failed to collect stats for JSON file: {}",
             file_path.display()
         )
     })?;
 
-    if !settings.args.quiet {
-        errors.eprint();
-    }
-
     Ok(stats)
 }
 
 fn run_stdin(settings: Settings) -> Result<()> {
-    let StatsResult { stats, errors } = io::stdin()
+    let stats = io::stdin()
         .json_stats(&settings)
         .context("Failed to collect stats for JSON stdin")?;
-
-    if !settings.args.quiet {
-        errors.eprint();
-    }
 
     stats.print()?;
     Ok(())
