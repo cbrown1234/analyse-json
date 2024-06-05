@@ -27,3 +27,16 @@ pub fn spawn_stdin_channel(stdin: io::Stdin, bound: usize) -> Receiver<String> {
     });
     rx
 }
+
+// TODO: Handle errors in a better way
+// https://stackoverflow.com/questions/30012995/how-can-i-read-non-blocking-from-stdin
+/// Setup background thread to read input from stdin into a channel
+pub fn spawn_stdin_channel_v2(stdin: io::Stdin, bound: usize) -> Receiver<io::Result<String>> {
+    let (tx, rx) = mpsc::sync_channel::<io::Result<String>>(bound);
+    thread::spawn(move || {
+        for line in stdin.lock().lines() {
+            tx.send(line).unwrap();
+        }
+    });
+    rx
+}

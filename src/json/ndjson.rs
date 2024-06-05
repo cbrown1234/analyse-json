@@ -46,6 +46,96 @@ trait Indexed: Iterator {
 
 impl<T> Indexed for T where T: Iterator {}
 
+type IdJSONResult = (String, Result<Value, NDJSONError>);
+
+trait ToNDJSON<'a> {
+    fn parse_ndjson(self) -> impl Iterator<Item = IdJSONResult> + 'a;
+}
+
+trait ToNDJSONPar<'a>: ToNDJSON<'a> {
+    fn parse_ndjson_par(self) -> impl ParallelIterator<Item = IdJSONResult> + 'a;
+}
+
+trait ProcessesNDJSON<'a> {
+    fn expand_jsonpath_query(self) -> Self;
+
+    fn apply_settings(self) -> Self;
+
+    fn process_json_iterable(self) -> Stats;
+}
+
+// TODO: IntoIterator or Iterator?
+impl<'a, T: IntoIterator<Item = io::Result<String>> + 'a> ToNDJSON<'a> for T {
+    fn parse_ndjson(self) -> impl Iterator<Item = IdJSONResult> + 'a {
+        self.into_iter()
+            .map(|result| result.map_err(|e| e.into()))
+            .indexed()
+            .map(|(i, json_candidate)| {
+                (
+                    i.to_string(),
+                    json_candidate
+                        .and_then(|jc| serde_json::from_str::<Value>(&jc).map_err(|e| e.into())),
+                )
+            })
+    }
+}
+
+// impl<'a, T: Iterator<Item=String> + 'a> ToNDJSON<'a> for T  {
+//     fn parse_ndjson(self) -> impl Iterator<Item = IdJSONResult> + 'a {
+//         let json_iter = self
+//             .into_iter()
+//             .indexed()
+//             .map(|(i, json_candidate)| {
+//                 (
+//                     i.to_string(),
+//                     serde_json::from_str::<Value>(&json_candidate).map_err(|e| e.into()),
+//                 )
+//             });
+//         json_iter
+//     }
+// }
+
+// impl<'a> ToNDJSON<'a> for Receiver<io::Result<String>> {
+//     fn parse_ndjson(self) -> impl Iterator<Item = IdJSONResult> + 'a {
+//         let mut json_candidates = self.into_iter();
+//         let json_iter = (&mut json_candidates as &mut dyn Iterator<Item=io::Result<String>>).parse_ndjson();
+//             // .into_iter()
+//             // .map(|result| result.map_err(|e| e.into()))
+//             // .indexed()
+//             // .map(|(i, json_candidate)| {
+//             //     (
+//             //         i.to_string(),
+//             //         json_candidate
+//             //             .and_then(|jc| serde_json::from_str::<Value>(&jc).map_err(|e| e.into())),
+//             //     )
+//             // });
+//         json_iter
+//     }
+// }
+
+// impl<'a> ToNDJSON<'a> for Receiver<io::Result<String>> {
+//     fn parse_ndjson(self) -> impl Iterator<Item = IdJSONResult> + 'a {
+//         let json_iter = self
+//             .into_iter()
+//             .map(|result| result.map_err(|e| e.into()))
+//             .indexed()
+//             .map(|(i, json_candidate)| {
+//                 (
+//                     i.to_string(),
+//                     json_candidate
+//                         .and_then(|jc| serde_json::from_str::<Value>(&jc).map_err(|e| e.into())),
+//                 )
+//             });
+//         json_iter
+//     }
+// }
+
+// impl<'a> ToNDJSON<'a> for Box<dyn BufRead> {
+//     fn parse_ndjson(self) -> impl Iterator<Item = IdJSONResult> + 'a {
+//         todo!()
+//     }
+// }
+
 // TODO: add or switch to method on `Receiver<String>`?
 /// Indexes data from the mpsc channel, converts it to serde JSON `Value`s and filters out data that does not
 /// parse as JSON to the `errors` container. Single threaded.
