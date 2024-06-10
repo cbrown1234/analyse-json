@@ -47,9 +47,10 @@ trait Indexed: Iterator {
 impl<T> Indexed for T where T: Iterator {}
 
 type IdJSONResult = (String, Result<Value, NDJSONError>);
+type IdJSONResultIter<'a> = Box<dyn Iterator<Item = IdJSONResult> + 'a>;
 
 trait ToNDJSON<'a> {
-    fn parse_ndjson(self) -> impl Iterator<Item = IdJSONResult> + 'a;
+    fn parse_ndjson(self, args: &Cli) -> impl Iterator<Item = IdJSONResult> + 'a;
 }
 
 trait ToNDJSONPar<'a>: ToNDJSON<'a> {
@@ -65,10 +66,9 @@ trait ProcessesNDJSON<'a> {
 }
 
 // TODO: IntoIterator or Iterator?
-impl<'a, T: IntoIterator<Item = io::Result<String>> + 'a> ToNDJSON<'a> for T {
-    fn parse_ndjson(self) -> impl Iterator<Item = IdJSONResult> + 'a {
-        self.into_iter()
-            .map(|result| result.map_err(|e| e.into()))
+impl<'a, T: Iterator<Item = io::Result<String>> + 'a> ToNDJSON<'a> for T {
+    fn parse_ndjson(self, _args: &Cli) -> impl Iterator<Item = IdJSONResult> + 'a {
+        self.map(|result| result.map_err(|e| e.into()))
             .indexed()
             .map(|(i, json_candidate)| {
                 (
@@ -83,9 +83,9 @@ impl<'a, T: IntoIterator<Item = io::Result<String>> + 'a> ToNDJSON<'a> for T {
 impl<'a, T: Iterator<Item = io::Result<String>> + Send + 'a> ToNDJSONPar<'a> for T {
     fn parse_ndjson_par(self, args: &Cli) -> impl ParallelIterator<Item = IdJSONResult> + 'a {
         let iter = self
-            .into_iter()
             .map(|result| result.map_err(|e| e.into()))
             .indexed()
+            // limit the lines before moving to the parallel processing where the lines would become non-deterministic
             .take(args.lines.unwrap_or(usize::MAX));
 
         iter.par_bridge().map(|(i, json_candidate)| {
@@ -96,6 +96,69 @@ impl<'a, T: Iterator<Item = io::Result<String>> + Send + 'a> ToNDJSONPar<'a> for
             )
         })
     }
+}
+
+// TODO: Consider switching to match _par implementation without Box<_> (needs benchmarking)
+/// Handles the jsonpath query expansion of the Iterators values. Single threaded
+///
+/// See also [`expand_jsonpath_query_result_par`]
+pub fn expand_jsonpath_query_result<'a>(
+    settings: &'a Settings,
+    json_iter: impl Iterator<Item = IdJSONResult> + 'a,
+) -> IdJSONResultIter<'a> {
+    let json_iter_out: IdJSONResultIter<'a>;
+    if let Some(ref selector) = settings.jsonpath_selector {
+        let path = settings.args.jsonpath.to_owned();
+        let path = path.expect("must exist for jsonpath_selector to exist");
+        let expanded = json_iter.flat_map(move |(id, json_result)| {
+            let Ok(json) = json_result else {
+                return vec![(id.to_owned(), json_result)];
+            };
+            let selected = selector.query(&json);
+            if selected.is_empty() {
+                return vec![(id, Err(NDJSONError::EmptyQuery))];
+            }
+            selected
+                .into_iter()
+                .enumerate()
+                .map(|(i, json)| (format!("{id}:{path}[{i}]"), Ok(json.to_owned())))
+                .collect::<Vec<_>>()
+        });
+        json_iter_out = Box::new(expanded);
+    } else {
+        json_iter_out = Box::new(json_iter);
+    }
+    json_iter_out
+}
+
+/// Handles the jsonpath query expansion of the Iterators values. Multi-threaded.
+///
+/// See also [`expand_jsonpath_query_result`]
+pub fn expand_jsonpath_query_result_par<'a>(
+    settings: &'a Settings,
+    json_iter: impl ParallelIterator<Item = IdJSONResult> + 'a,
+) -> impl ParallelIterator<Item = IdJSONResult> + 'a {
+    json_iter.flat_map(move |(id, json_result)| {
+        let Some(ref selector) = settings.jsonpath_selector else {
+            return vec![(id, json_result)];
+        };
+        let Ok(json_input) = json_result else {
+            return vec![(id, json_result)];
+        };
+
+        let path = settings.args.jsonpath.to_owned();
+        let path = path.expect("must exist for jsonpath_selector to exist");
+
+        let selected = selector.query(&json_input);
+        if selected.is_empty() {
+            return vec![(id, Err(NDJSONError::EmptyQuery))];
+        }
+        selected
+            .into_iter()
+            .enumerate()
+            .map(|(i, json)| (format!("{id}:{path}[{i}]"), Ok(json.to_owned())))
+            .collect::<Vec<_>>()
+    })
 }
 
 // impl<'a, T: Iterator<Item=String> + 'a> ToNDJSON<'a> for T  {
