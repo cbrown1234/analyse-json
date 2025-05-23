@@ -24,23 +24,23 @@ exclude = [
 
 [dependencies]
 serde_json = "1.0"
-itertools = "0.13"
+itertools = "0.14"
 clap = { version = "4", features = ["derive"] }
 glob = "0.3"
-indexmap = { version = "1.9.3", features = ["serde"] }
-rayon = "1.7"
-dashmap = "5"
-humantime = "2.1"
+indexmap = { version = "2.9.0", features = ["serde"] }
+rayon = "1.10"
+dashmap = "6"
+humantime = "2.2"
 flate2 = "1"
 grep-cli = "0.1"
 owo-colors = { version = "4", features = ["supports-colors"]}
 serde = { version = "1.0", features = ["derive"] }
 clap_complete = "4"
-indicatif = { version = "0.17.3", features = ["rayon"] }
-log = "0.4.20"
+indicatif = { version = "0.17.11", features = ["rayon"] }
+log = "0.4.27"
 env_logger = "0.10.2"
-thiserror = "1.0.56"
-anyhow = "1.0.79"
+thiserror = "2.0.12"
+anyhow = "1.0.98"
 serde_json_path = "0.7.2"
 
 [dev-dependencies]
