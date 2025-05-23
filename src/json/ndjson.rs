@@ -756,7 +756,12 @@ mod tests {
         args.jsonpath = Some("$.a".to_string());
         let settings = Settings::init(args).unwrap();
         let errors = ErrorsPar::default();
-        let stats = process_json_iterable_par(&settings, iter, &errors);
+        let mut stats = process_json_iterable_par(&settings, iter, &errors);
+        stats.empty_lines.sort_by(|a, b| {
+            a.parse::<usize>()
+                .unwrap()
+                .cmp(&b.parse::<usize>().unwrap())
+        });
         assert_eq!(expected, stats);
     }
 
