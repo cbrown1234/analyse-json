@@ -127,7 +127,7 @@ impl JSONPathIndex for String {
     }
 }
 
-impl<'a, T> JSONPathIndex for &'a T
+impl<T> JSONPathIndex for &T
 where
     T: ?Sized + JSONPathIndex,
 {
