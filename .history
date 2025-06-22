@@ -1,0 +1,10 @@
+#V2
+select count(*) from 'test_data';
+select count(*) from 'test_data/some_data_2.json';
+select count(*) from 'test_data_large/';
+select * from 'test_data_large/' limit 5;
+select unnest(*) from 'test_data_large/' limit 5;
+select unnest(key3) from 'test_data_large/' limit 5;
+select unnest(*) from 'test_data_large/' limit 5;
+select unnest(key3) from 'test_data_large/' limit 5;
+show columns from 'test_data_large/';

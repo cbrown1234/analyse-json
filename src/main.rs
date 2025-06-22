@@ -2,7 +2,8 @@ use analyse_json::Cli;
 use clap::Parser;
 use std::process;
 
-fn main() {
+#[tokio::main]
+async fn main() {
     env_logger::init();
 
     let args = Cli::parse();

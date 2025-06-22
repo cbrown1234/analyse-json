@@ -4,6 +4,7 @@ use clap::builder::Styles;
 use clap::CommandFactory;
 use clap::Parser;
 use clap_complete::Shell;
+use datafusion::prelude::*;
 use glob::glob;
 use grep_cli::is_readable_stdin;
 use humantime::format_duration;
@@ -182,9 +183,25 @@ fn print_completions(args: Cli) {
     clap_complete::generate(shell, &mut cmd, bin_name, &mut io::stdout());
 }
 
+use arrow_json::reader::infer_json_schema;
+use flate2::read::GzDecoder;
+use std::fs::File;
+use std::io::{BufReader, Seek, SeekFrom};
+
 pub fn run(args: Cli) -> Result<()> {
     let now = Instant::now();
     let settings = Settings::init(args).context("Failed to initialise settings from CLI args")?;
+
+    // if let Some(file_path) = &settings.args.file_path {
+    //     let mut file = File::open(file_path)?;
+    //     let mut reader = BufReader::new(file);
+    //     let schema = infer_json_schema(&mut reader, None)?;
+    //     let schema_schema = schema.0;
+    //     println!("{schema_schema}");
+    //     eprintln!("Completed in {}", format_duration(now.elapsed()));
+    //     return Ok(());
+    // }
+
     if settings.args.generate_completions.is_some() {
         print_completions(settings.args);
         return Ok(());
