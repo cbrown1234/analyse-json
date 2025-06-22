@@ -1,6 +1,8 @@
 pub mod errors;
 pub mod stats;
 
+use std::fmt::Write;
+
 use crate::io_helpers::buf_reader::get_bufreader;
 use crate::io_helpers::stdin::BackgroundRead;
 use crate::json::paths::ValuePaths;
@@ -15,6 +17,7 @@ use self::errors::NDJSONError;
 pub use self::stats::{FileStats, Stats};
 
 use dashmap::DashMap;
+use indexmap::map::RawEntryApiV1;
 use indicatif::{ProgressBar, ProgressStyle};
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
@@ -484,6 +487,7 @@ pub fn process_json_result_iterable(
             .unwrap(),
     );
 
+    let mut path_type = String::with_capacity(100);
     for (id, json_result) in json_iter {
         match json_result {
             Ok(json) => {
@@ -496,8 +500,14 @@ pub fn process_json_result_iterable(
                     *counter += 1;
 
                     let type_ = value_path.value.value_type();
-                    let path_type = format!("{}::{}", path, type_);
-                    let counter = fs.keys_types_count.entry(path_type).or_insert(0);
+                    // TODO: consider doing more reduction of allocations like this:
+                    path_type.clear();
+                    write!(path_type, "{}::{}", path, type_).unwrap();
+                    let (_, counter) = fs
+                        .keys_types_count
+                        .raw_entry_mut_v1()
+                        .from_key(&path_type)
+                        .or_insert_with(|| (path_type.to_owned(), 0));
                     *counter += 1;
                 }
             }
