@@ -192,15 +192,15 @@ pub fn run(args: Cli) -> Result<()> {
     let now = Instant::now();
     let settings = Settings::init(args).context("Failed to initialise settings from CLI args")?;
 
-    // if let Some(file_path) = &settings.args.file_path {
-    //     let mut file = File::open(file_path)?;
-    //     let mut reader = BufReader::new(file);
-    //     let schema = infer_json_schema(&mut reader, None)?;
-    //     let schema_schema = schema.0;
-    //     println!("{schema_schema}");
-    //     eprintln!("Completed in {}", format_duration(now.elapsed()));
-    //     return Ok(());
-    // }
+    if let Some(file_path) = &settings.args.file_path {
+        let mut file = File::open(file_path)?;
+        let mut reader = BufReader::new(file);
+        let schema = infer_json_schema(&mut reader, None)?;
+        let schema_schema = schema.0;
+        println!("{schema_schema}");
+        eprintln!("Completed in {}", format_duration(now.elapsed()));
+        return Ok(());
+    }
 
     if settings.args.generate_completions.is_some() {
         print_completions(settings.args);
