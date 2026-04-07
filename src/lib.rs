@@ -10,7 +10,6 @@ use humantime::format_duration;
 use json::ndjson::JSONStats;
 use serde_json_path::JsonPath;
 use std::io;
-use std::path::PathBuf;
 use std::time::Instant;
 
 use crate::json::ndjson;
@@ -102,17 +101,6 @@ impl Settings {
     }
 }
 
-fn process_ndjson_file_path(settings: &Settings, file_path: &PathBuf) -> Result<ndjson::Stats> {
-    let stats = file_path.json_stats(settings).with_context(|| {
-        format!(
-            "Failed to collect stats for JSON file: {}",
-            file_path.display()
-        )
-    })?;
-
-    Ok(stats)
-}
-
 fn run_stdin(settings: Settings) -> Result<()> {
     let stats = io::stdin()
         .json_stats(&settings)
@@ -124,7 +112,12 @@ fn run_stdin(settings: Settings) -> Result<()> {
 
 fn run_no_stdin(settings: Settings) -> Result<()> {
     if let Some(file_path) = &settings.args.file_path {
-        let file_stats = process_ndjson_file_path(&settings, file_path)?;
+        let file_stats = file_path.json_stats(&settings).with_context(|| {
+            format!(
+                "Failed to collect stats for JSON file: {}",
+                file_path.display()
+            )
+        })?;
 
         file_stats.print()?;
         return Ok(());
@@ -142,7 +135,12 @@ fn run_no_stdin(settings: Settings) -> Result<()> {
             println!("File '{}':", file_path.display());
             let file_stats = ndjson::FileStats::new(
                 file_path.to_string_lossy().into_owned(),
-                process_ndjson_file_path(&settings, &file_path)?,
+                file_path.json_stats(&settings).with_context(|| {
+                    format!(
+                        "Failed to collect stats for JSON file: {}",
+                        file_path.display()
+                    )
+                })?,
             );
 
             file_stats.stats.print().with_context(|| {
@@ -176,6 +174,7 @@ fn print_completions(args: Cli) {
 pub fn run(args: Cli) -> Result<()> {
     let now = Instant::now();
     let settings = Settings::init(args).context("Failed to initialise settings from CLI args")?;
+    let quiet = settings.args.quiet;
     if settings.args.generate_completions.is_some() {
         print_completions(settings.args);
         return Ok(());
@@ -188,7 +187,9 @@ pub fn run(args: Cli) -> Result<()> {
     } else {
         run_no_stdin(settings).context("Failed to process file(s)")?;
     }
-    eprintln!("Completed in {}", format_duration(now.elapsed()));
+    if !quiet {
+        eprintln!("Completed in {}", format_duration(now.elapsed()));
+    }
     Ok(())
 }
 

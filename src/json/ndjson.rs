@@ -18,6 +18,7 @@ pub use self::stats::{FileStats, Stats};
 use dashmap::DashMap;
 use indexmap::map::RawEntryApiV1;
 use indicatif::{ProgressBar, ProgressStyle};
+use itertools::Either;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
 
@@ -390,15 +391,11 @@ pub fn apply_settings<'a>(
     expand_jsonpath_query(settings, json_iter, errors)
 }
 
-/// Apply pre-processing based on settings from CLI args. Multi-threaded.
-///
-/// See also [`apply_settings`]
-pub fn apply_settings_par<'a>(
-    settings: &'a Settings,
-    json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
-    errors: &NDJSONErrorsPar,
-) -> impl ParallelIterator<Item = IdJSON> + 'a {
-    expand_jsonpath_query_par(settings, json_iter, errors)
+fn make_spinner() -> ProgressBar {
+    ProgressBar::new_spinner().with_style(
+        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
+            .unwrap(),
+    )
 }
 
 /// Main function processing the JSON data, collecting key information about the content.
@@ -415,10 +412,7 @@ pub fn process_json_result_iterable(
     let json_iter = limit(args, json_iter);
     let json_iter = expand_jsonpath_query_result(settings, json_iter);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = make_spinner();
 
     let mut path_type = String::with_capacity(100);
     for (id, json_result) in json_iter {
@@ -469,10 +463,7 @@ pub fn process_json_iterable(
 
     let json_iter = apply_settings(settings, json_iter, errors);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = make_spinner();
 
     for (_id, json) in json_iter {
         spinner.inc(1);
@@ -520,10 +511,7 @@ pub fn process_json_result_iterable_par<'a>(
 
     let json_iter = expand_jsonpath_query_result_par(settings, json_iter);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = make_spinner();
 
     let bad_lines = Mutex::new(Vec::default());
     let empty_lines = Mutex::new(Vec::default());
@@ -591,12 +579,9 @@ pub fn process_json_iterable_par<'a>(
     let keys_types_count: DashMap<String, usize> = DashMap::new();
     let line_count = AtomicUsize::new(0);
 
-    let json_iter = apply_settings_par(settings, json_iter, errors);
+    let json_iter = expand_jsonpath_query_par(settings, json_iter, errors);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = make_spinner();
 
     json_iter.for_each(|(_id, json)| {
         line_count.fetch_add(1, Ordering::Release);
@@ -645,14 +630,14 @@ pub fn process_json_iterable_par<'a>(
 }
 
 /// Apply line limiting from the arg to the Iterator
-pub fn limit<'a, I, T>(args: &Cli, iter: I) -> Box<dyn Iterator<Item = T> + 'a>
+pub fn limit<I, T>(args: &Cli, iter: I) -> impl Iterator<Item = T>
 where
-    I: Iterator<Item = T> + 'a,
+    I: Iterator<Item = T>,
 {
     if let Some(n) = args.lines {
-        Box::new(iter.take(n))
+        Either::Left(iter.take(n))
     } else {
-        Box::new(iter)
+        Either::Right(iter)
     }
 }
 

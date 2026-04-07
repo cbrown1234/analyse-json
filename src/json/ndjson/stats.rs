@@ -18,6 +18,12 @@ pub struct Stats {
     // TODO: Add this: pub json_count: usize,
 }
 
+fn merge_map(dst: &mut IndexMap<String, usize>, src: IndexMap<String, usize>) {
+    for (k, v) in src {
+        *dst.entry(k).or_insert(0) += v;
+    }
+}
+
 impl Stats {
     pub fn key_occurance(&self) -> IndexMap<String, f64> {
         self.keys_count
@@ -99,16 +105,8 @@ impl Add for FileStats {
     fn add(self, rhs: Self) -> Self::Output {
         let mut output = self.stats;
 
-        for (k, v) in rhs.stats.keys_count {
-            let counter = output.keys_count.entry(k).or_insert(0);
-            *counter += v
-        }
-
-        for (k, v) in rhs.stats.keys_types_count {
-            let counter = output.keys_types_count.entry(k).or_insert(0);
-            *counter += v
-        }
-
+        merge_map(&mut output.keys_count, rhs.stats.keys_count);
+        merge_map(&mut output.keys_types_count, rhs.stats.keys_types_count);
         output.line_count += rhs.stats.line_count;
 
         output.bad_lines = output
@@ -159,16 +157,8 @@ impl Add<FileStats> for Stats {
     fn add(self, rhs: FileStats) -> Self::Output {
         let mut output = self;
 
-        for (k, v) in rhs.stats.keys_count {
-            let counter = output.keys_count.entry(k).or_insert(0);
-            *counter += v
-        }
-
-        for (k, v) in rhs.stats.keys_types_count {
-            let counter = output.keys_types_count.entry(k).or_insert(0);
-            *counter += v
-        }
-
+        merge_map(&mut output.keys_count, rhs.stats.keys_count);
+        merge_map(&mut output.keys_types_count, rhs.stats.keys_types_count);
         output.line_count += rhs.stats.line_count;
 
         output.bad_lines.extend(
