@@ -15,7 +15,6 @@ use self::errors::collection::{
 use self::errors::NDJSONError;
 pub use self::stats::{FileStats, Stats};
 
-use dashmap::DashMap;
 use indexmap::map::RawEntryApiV1;
 use indicatif::{ProgressBar, ProgressStyle};
 use itertools::Either;
@@ -28,9 +27,7 @@ use std::io::{self, prelude::*};
 use std::iter::Zip;
 use std::ops::RangeFrom;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
-use std::sync::Mutex;
 
 // Reusable types for function signatures
 type IJSONCandidate = (usize, String);
@@ -398,6 +395,25 @@ fn make_spinner() -> ProgressBar {
     )
 }
 
+fn count_json(json: &Value, args: &Cli, stats: &mut Stats) {
+    stats.line_count += 1;
+    let mut path_type = String::with_capacity(100);
+    for value_path in json.value_paths(args.explode_arrays, args.inspect_arrays) {
+        let path = value_path.jsonpath();
+        *stats.keys_count.entry(path.to_owned()).or_insert(0) += 1;
+
+        let type_ = value_path.value.value_type();
+        path_type.clear();
+        write!(path_type, "{}::{}", path, type_).unwrap();
+        let (_, counter) = stats
+            .keys_types_count
+            .raw_entry_mut_v1()
+            .from_key(&path_type)
+            .or_insert_with(|| (path_type.to_owned(), 0));
+        *counter += 1;
+    }
+}
+
 /// Main function processing the JSON data, collecting key information about the content.
 /// Single threaded.
 ///
@@ -414,29 +430,11 @@ pub fn process_json_result_iterable(
 
     let spinner = make_spinner();
 
-    let mut path_type = String::with_capacity(100);
     for (id, json_result) in json_iter {
         match json_result {
             Ok(json) => {
                 spinner.inc(1);
-                fs.line_count += 1;
-
-                for value_path in json.value_paths(args.explode_arrays, args.inspect_arrays) {
-                    let path = value_path.jsonpath();
-                    let counter = fs.keys_count.entry(path.to_owned()).or_insert(0);
-                    *counter += 1;
-
-                    let type_ = value_path.value.value_type();
-                    // TODO: consider doing more reduction of allocations like this:
-                    path_type.clear();
-                    write!(path_type, "{}::{}", path, type_).unwrap();
-                    let (_, counter) = fs
-                        .keys_types_count
-                        .raw_entry_mut_v1()
-                        .from_key(&path_type)
-                        .or_insert_with(|| (path_type.to_owned(), 0));
-                    *counter += 1;
-                }
+                count_json(&json, args, &mut fs);
             }
             Err(NDJSONError::JSONParsingError(_) | NDJSONError::IOError(_)) => {
                 fs.bad_lines.push(id)
@@ -504,64 +502,25 @@ pub fn process_json_result_iterable_par<'a>(
     json_iter: impl ParallelIterator<Item = IdJSONResult> + 'a,
 ) -> Stats {
     let args = &settings.args;
-
-    let keys_count: DashMap<String, usize> = DashMap::new();
-    let keys_types_count: DashMap<String, usize> = DashMap::new();
-    let line_count = AtomicUsize::new(0);
-
-    let json_iter = expand_jsonpath_query_result_par(settings, json_iter);
-
     let spinner = make_spinner();
-
-    let bad_lines = Mutex::new(Vec::default());
-    let empty_lines = Mutex::new(Vec::default());
-
-    json_iter.for_each(|(id, json_result)| match json_result {
-        Ok(json) => {
-            line_count.fetch_add(1, Ordering::Release);
-
-            for value_path in json.value_paths(args.explode_arrays, args.inspect_arrays) {
-                let path = value_path.jsonpath();
-                let mut counter = keys_count.entry(path.to_owned()).or_insert(0);
-                *counter.value_mut() += 1;
-
-                let type_ = value_path.value.value_type();
-                let path_type = format!("{}::{}", path, type_);
-                let mut counter = keys_types_count.entry(path_type).or_insert(0);
-                *counter.value_mut() += 1;
+    let json_iter = expand_jsonpath_query_result_par(settings, json_iter);
+    let stats = json_iter
+        .fold(Stats::default, |mut acc, (id, result)| {
+            match result {
+                Ok(json) => {
+                    spinner.inc(1);
+                    count_json(&json, args, &mut acc);
+                }
+                Err(NDJSONError::JSONParsingError(_) | NDJSONError::IOError(_)) => {
+                    acc.bad_lines.push(id)
+                }
+                Err(NDJSONError::EmptyQuery) => acc.empty_lines.push(id),
             }
-            spinner.inc(1);
-        }
-        Err(error) => match error {
-            NDJSONError::JSONParsingError(_) | NDJSONError::IOError(_) => {
-                let mut bad_lines = bad_lines.lock().unwrap();
-                bad_lines.push(id);
-            }
-            NDJSONError::EmptyQuery => {
-                let mut empty_lines = empty_lines.lock().unwrap();
-                empty_lines.push(id);
-            }
-        },
-    });
-
+            acc
+        })
+        .reduce(Stats::default, |a, b| a + b);
     spinner.finish();
-
-    let fs = Stats {
-        keys_count: keys_count
-            .into_read_only()
-            .iter()
-            .map(|(k, v)| (k.to_owned(), v.to_owned()))
-            .collect(),
-        line_count: line_count.load(Ordering::Acquire),
-        keys_types_count: keys_types_count
-            .into_read_only()
-            .iter()
-            .map(|(k, v)| (k.to_owned(), v.to_owned()))
-            .collect(),
-        bad_lines: bad_lines.into_inner().unwrap(),
-        empty_lines: empty_lines.into_inner().unwrap(),
-    };
-    fs
+    stats
 }
 
 /// Main function processing the JSON data, collecting key information about the content.
@@ -574,59 +533,28 @@ pub fn process_json_iterable_par<'a>(
     errors: &'a NDJSONErrorsPar,
 ) -> Stats {
     let args = &settings.args;
-
-    let keys_count: DashMap<String, usize> = DashMap::new();
-    let keys_types_count: DashMap<String, usize> = DashMap::new();
-    let line_count = AtomicUsize::new(0);
-
-    let json_iter = expand_jsonpath_query_par(settings, json_iter, errors);
-
     let spinner = make_spinner();
-
-    json_iter.for_each(|(_id, json)| {
-        line_count.fetch_add(1, Ordering::Release);
-
-        for value_path in json.value_paths(args.explode_arrays, args.inspect_arrays) {
-            let path = value_path.jsonpath();
-            let mut counter = keys_count.entry(path.to_owned()).or_insert(0);
-            *counter.value_mut() += 1;
-
-            let type_ = value_path.value.value_type();
-            let path_type = format!("{}::{}", path, type_);
-            let mut counter = keys_types_count.entry(path_type).or_insert(0);
-            *counter.value_mut() += 1;
-        }
-        spinner.inc(1);
-    });
-
+    let json_iter = expand_jsonpath_query_par(settings, json_iter, errors);
+    let mut stats = json_iter
+        .fold(Stats::default, |mut acc, (_id, json)| {
+            spinner.inc(1);
+            count_json(&json, args, &mut acc);
+            acc
+        })
+        .reduce(Stats::default, |a, b| a + b);
     spinner.finish();
 
-    let mut bad_lines = Vec::new();
-    let mut empty_lines = Vec::new();
     for indexed_error in errors.container.lock().unwrap().as_slice() {
         let IndexedNDJSONError { location, error } = indexed_error;
         let location = location.to_owned();
         match error {
-            NDJSONError::JSONParsingError(_) | NDJSONError::IOError(_) => bad_lines.push(location),
-            NDJSONError::EmptyQuery => empty_lines.push(location),
+            NDJSONError::JSONParsingError(_) | NDJSONError::IOError(_) => {
+                stats.bad_lines.push(location)
+            }
+            NDJSONError::EmptyQuery => stats.empty_lines.push(location),
         }
     }
-
-    Stats {
-        keys_count: keys_count
-            .into_read_only()
-            .iter()
-            .map(|(k, v)| (k.to_owned(), v.to_owned()))
-            .collect(),
-        line_count: line_count.load(Ordering::Acquire),
-        keys_types_count: keys_types_count
-            .into_read_only()
-            .iter()
-            .map(|(k, v)| (k.to_owned(), v.to_owned()))
-            .collect(),
-        bad_lines,
-        empty_lines,
-    }
+    stats
 }
 
 /// Apply line limiting from the arg to the Iterator

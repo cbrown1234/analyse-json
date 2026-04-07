@@ -29,7 +29,6 @@ clap = { version = "4", features = ["derive"] }
 glob = "0.3"
 indexmap = { version = "2.9.0", features = ["serde"] }
 rayon = "1.10"
-dashmap = "6"
 humantime = "2.2"
 flate2 = "1"
 grep-cli = "0.1"

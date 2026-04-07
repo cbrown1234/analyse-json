@@ -186,3 +186,16 @@ impl Add<&FileStats> for Stats {
         self.add(rhs.clone())
     }
 }
+
+impl Add for Stats {
+    type Output = Self;
+
+    fn add(mut self, rhs: Self) -> Self::Output {
+        merge_map(&mut self.keys_count, rhs.keys_count);
+        merge_map(&mut self.keys_types_count, rhs.keys_types_count);
+        self.line_count += rhs.line_count;
+        self.bad_lines.extend(rhs.bad_lines);
+        self.empty_lines.extend(rhs.empty_lines);
+        self
+    }
+}
