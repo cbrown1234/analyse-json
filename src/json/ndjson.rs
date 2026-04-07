@@ -9,9 +9,6 @@ use crate::json::paths::ValuePaths;
 use crate::json::{Value, ValueType};
 use crate::{Cli, Settings};
 
-use self::errors::collection::{
-    Errors, ErrorsPar, IndexedNDJSONError, IntoEnumeratedErrFiltered, IntoErrFiltered,
-};
 use self::errors::NDJSONError;
 pub use self::stats::{FileStats, Stats};
 
@@ -21,20 +18,12 @@ use itertools::Either;
 use rayon::iter::ParallelBridge;
 use rayon::prelude::ParallelIterator;
 
-use std::error::Error;
-use std::fs::File;
 use std::io::{self, prelude::*};
 use std::iter::Zip;
 use std::ops::RangeFrom;
 use std::path::PathBuf;
-use std::sync::mpsc::Receiver;
 
 // Reusable types for function signatures
-type IJSONCandidate = (usize, String);
-type IdJSON = (String, Value);
-type IdJSONIter<'a> = Box<dyn Iterator<Item = IdJSON> + 'a>;
-type NDJSONErrors = Errors<IndexedNDJSONError>;
-type NDJSONErrorsPar = ErrorsPar<IndexedNDJSONError>;
 
 trait Indexed: Iterator {
     fn indexed(self) -> Zip<RangeFrom<usize>, Self>
@@ -154,240 +143,6 @@ pub fn expand_jsonpath_query_result_par<'a>(
     })
 }
 
-// TODO: add or switch to method on `Receiver<String>`?
-/// Indexes data from the mpsc channel, converts it to serde JSON `Value`s and filters out data that does not
-/// parse as JSON to the `errors` container. Single threaded.
-///
-/// See also: [`parse_ndjson_receiver_par`]
-pub fn parse_ndjson_receiver<'a>(
-    receiver: Receiver<String>,
-    errors: &NDJSONErrors,
-) -> Result<IdJSONIter<'a>, Box<dyn Error>> {
-    let json_iter = receiver
-        .into_iter()
-        .indexed()
-        .map(|(i, json_candidate)| {
-            (
-                i.to_string(),
-                serde_json::from_str::<Value>(&json_candidate),
-            )
-        })
-        .to_err_filtered(errors.new_ref());
-
-    Ok(Box::new(json_iter))
-}
-
-// TODO: add or switch to method on `Receiver<String>`?
-/// Indexes data from the mpsc channel, converts it to serde JSON `Value`s and filters out data that does not
-/// parse as JSON to the `errors` container. Multithreaded version of [`parse_ndjson_receiver`].
-///
-/// See also: [`parse_ndjson_receiver`], [`parse_ndjson_bufreader_par`] & [`parse_ndjson_iter_par`]
-pub fn parse_ndjson_receiver_par<'a>(
-    args: &Cli,
-    receiver: Receiver<String>,
-    errors: &'a NDJSONErrorsPar,
-) -> impl ParallelIterator<Item = IdJSON> + 'a {
-    let receiver = receiver.into_iter().indexed();
-    parse_ndjson_iter_par(args, receiver, errors)
-}
-
-// TODO: rename or switch function args?
-// TODO: add or switch to method on `&PathBuf`?
-/// Indexes data from the file_path with a bufreader, converts it to serde JSON `Value`s
-/// and filters out data that does not
-/// parse as JSON to the `errors` container. Multithreaded version of [`parse_ndjson_bufreader`].
-///
-/// See also: [`parse_ndjson_bufreader`], [`parse_ndjson_receiver_par`] & [`parse_ndjson_iter_par`]
-pub fn parse_ndjson_bufreader_par<'a>(
-    args: &Cli,
-    file_path: &PathBuf,
-    errors: &'a NDJSONErrorsPar,
-) -> Result<impl ParallelIterator<Item = IdJSON> + 'a, NDJSONError> {
-    let reader = get_bufreader(args, file_path)?;
-
-    let iter = reader.lines().enumerate();
-    let iter = iter.filter_map(|(i, line)| {
-        let i = i + 1; // count lines from 1
-        let io_errors = errors.new_ref();
-        match line {
-            Err(e) => {
-                io_errors.push(IndexedNDJSONError {
-                    location: i.to_string(),
-                    error: NDJSONError::IOError(e),
-                });
-                None
-            }
-            Ok(json) => Some((i, json)),
-        }
-    });
-
-    Ok(parse_ndjson_iter_par(args, iter, errors))
-}
-
-// https://github.com/rayon-rs/rayon/issues/628
-// https://users.rust-lang.org/t/how-to-wrap-a-non-object-safe-trait-in-an-object-safe-one/33904
-/// Processes indexed data from the Iterator, converts it to serde JSON `Value`s
-/// and filters out data that does not parse as JSON to the `errors` container.
-///
-/// See also: [`parse_ndjson_receiver_par`] & [`parse_ndjson_bufreader_par`]
-pub fn parse_ndjson_iter_par<'a>(
-    args: &Cli,
-    iter: impl Iterator<Item = IJSONCandidate> + Send + 'a,
-    errors: &'a NDJSONErrorsPar,
-) -> impl ParallelIterator<Item = IdJSON> + 'a {
-    let iter = iter.take(args.lines.unwrap_or(usize::MAX));
-
-    let json_iter = iter.par_bridge().map(|(i, json_candidate)| {
-        (
-            i.to_string(),
-            serde_json::from_str::<Value>(&json_candidate),
-        )
-    });
-
-    json_iter.filter_map(|(id, json)| {
-        let json_parse_errors = errors.new_ref();
-        match json {
-            Err(e) => {
-                json_parse_errors.push(IndexedNDJSONError {
-                    location: id,
-                    error: NDJSONError::JSONParsingError(e),
-                });
-                None
-            }
-            Ok(json) => Some((id, json)),
-        }
-    })
-}
-
-/// Indexes data from the bufreader, converts it to serde JSON `Value`s
-/// and filters out data that does not
-/// parse as JSON to the `errors` container. Single threaded version of [`parse_ndjson_bufreader_par`].
-///
-/// See also: [`parse_ndjson_bufreader_par`], [`parse_ndjson_file`], [`parse_ndjson_file_path`] & [`parse_ndjson_receiver`]
-pub fn parse_ndjson_bufreader<'a>(
-    reader: impl BufRead + 'a,
-    errors: &NDJSONErrors,
-) -> IdJSONIter<'a> {
-    let json_iter = reader.lines();
-
-    let json_iter = json_iter.to_enumerated_err_filtered(errors.new_ref());
-
-    let json_iter = json_iter.map(|(i, json_candidate)| {
-        (
-            i.to_string(),
-            serde_json::from_str::<Value>(&json_candidate),
-        )
-    });
-    let json_iter = json_iter.to_err_filtered(errors.new_ref());
-
-    Box::new(json_iter)
-}
-
-/// Indexes data from the file, converts it to serde JSON `Value`s
-/// and filters out data that does not
-/// parse as JSON to the `errors` container. Single threaded.
-///
-/// See also: [`parse_ndjson_bufreader`], [`parse_ndjson_file_path`] & [`parse_ndjson_receiver`]
-pub fn parse_ndjson_file<'a>(_args: &Cli, file: File, errors: &NDJSONErrors) -> IdJSONIter<'a> {
-    let reader = io::BufReader::new(file);
-    parse_ndjson_bufreader(reader, errors)
-}
-
-/// Indexes data from the file_path, converts it to serde JSON `Value`s
-/// and filters out data that does not
-/// parse as JSON to the `errors` container. Single threaded.
-///
-/// See also: [`parse_ndjson_bufreader`], [`parse_ndjson_file`] & [`parse_ndjson_receiver`]
-pub fn parse_ndjson_file_path<'a>(
-    args: &Cli,
-    file_path: &PathBuf,
-    errors: &NDJSONErrors,
-) -> Result<IdJSONIter<'a>, NDJSONError> {
-    let reader = get_bufreader(args, file_path)?;
-    Ok(parse_ndjson_bufreader(reader, errors))
-}
-
-/// Handles the jsonpath query expansion of the Iterators values. Single threaded
-///
-/// See also [`expand_jsonpath_query_par`]
-pub fn expand_jsonpath_query<'a>(
-    settings: &'a Settings,
-    json_iter: impl Iterator<Item = IdJSON> + 'a,
-    errors: &NDJSONErrors,
-) -> IdJSONIter<'a> {
-    let missing = errors.new_ref();
-    let json_iter_out: IdJSONIter<'a>;
-    if let Some(ref selector) = settings.jsonpath_selector {
-        let path = settings.args.jsonpath.to_owned();
-        let path = path.expect("must exist for jsonpath_selector to exist");
-        let expanded = json_iter.flat_map(move |(ref id, ref json)| {
-            let selected = selector.query(json);
-            if selected.is_empty() {
-                missing.push(IndexedNDJSONError::new(
-                    id.to_owned(),
-                    NDJSONError::EmptyQuery,
-                ))
-            }
-            selected
-                .into_iter()
-                .enumerate()
-                .map(|(i, json)| (format!("{id}:{path}[{i}]"), json.to_owned()))
-                .collect::<Vec<_>>()
-        });
-        json_iter_out = Box::new(expanded);
-    } else {
-        json_iter_out = Box::new(json_iter);
-    }
-    json_iter_out
-}
-
-/// Handles the jsonpath query expansion of the Iterators values. Multi-threaded.
-///
-/// See also [`expand_jsonpath_query`]
-pub fn expand_jsonpath_query_par<'a>(
-    settings: &'a Settings,
-    json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
-    errors: &NDJSONErrorsPar,
-) -> impl ParallelIterator<Item = IdJSON> + 'a {
-    let missing = errors.new_ref();
-
-    json_iter.flat_map(move |(id, json)| {
-        if let Some(ref selector) = settings.jsonpath_selector {
-            let path = settings.args.jsonpath.to_owned();
-            let path = path.expect("must exist for jsonpath_selector to exist");
-
-            let selected = selector.query(&json);
-            if selected.is_empty() {
-                missing.push(IndexedNDJSONError::new(
-                    id.to_owned(),
-                    NDJSONError::EmptyQuery,
-                ))
-            }
-            selected
-                .into_iter()
-                .enumerate()
-                .map(|(i, json)| (format!("{id}:{path}[{i}]"), json.to_owned()))
-                .collect::<Vec<_>>()
-        } else {
-            vec![(id, json)]
-        }
-    })
-}
-
-/// Apply pre-processing based on settings from CLI args. Single threaded.
-///
-/// See also [`apply_settings_par`]
-pub fn apply_settings<'a>(
-    settings: &'a Settings,
-    json_iter: impl Iterator<Item = IdJSON> + 'a,
-    errors: &NDJSONErrors,
-) -> IdJSONIter<'a> {
-    let args = &settings.args;
-
-    let json_iter = limit(args, json_iter);
-    expand_jsonpath_query(settings, json_iter, errors)
-}
-
 fn make_spinner() -> ProgressBar {
     ProgressBar::new_spinner().with_style(
         ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
@@ -448,52 +203,6 @@ pub fn process_json_result_iterable(
 }
 
 /// Main function processing the JSON data, collecting key information about the content.
-/// Single threaded.
-///
-/// See also [`process_json_iterable_par`]
-pub fn process_json_iterable(
-    settings: &Settings,
-    json_iter: impl Iterator<Item = IdJSON>,
-    errors: &NDJSONErrors,
-) -> Stats {
-    let mut fs = Stats::default();
-    let args = &settings.args;
-
-    let json_iter = apply_settings(settings, json_iter, errors);
-
-    let spinner = make_spinner();
-
-    for (_id, json) in json_iter {
-        spinner.inc(1);
-        fs.line_count += 1;
-
-        for value_path in json.value_paths(args.explode_arrays, args.inspect_arrays) {
-            let path = value_path.jsonpath();
-            let counter = fs.keys_count.entry(path.to_owned()).or_insert(0);
-            *counter += 1;
-
-            let type_ = value_path.value.value_type();
-            let path_type = format!("{}::{}", path, type_);
-            let counter = fs.keys_types_count.entry(path_type).or_insert(0);
-            *counter += 1;
-        }
-    }
-    spinner.finish();
-
-    for indexed_error in errors.container.borrow().as_slice() {
-        let IndexedNDJSONError { location, error } = indexed_error;
-        let location = location.to_owned();
-        match error {
-            NDJSONError::JSONParsingError(_) | NDJSONError::IOError(_) => {
-                fs.bad_lines.push(location)
-            }
-            NDJSONError::EmptyQuery => fs.empty_lines.push(location),
-        }
-    }
-    fs
-}
-
-/// Main function processing the JSON data, collecting key information about the content.
 /// Multi-threaded version of [`process_json_result_iterable`].
 ///
 /// See also [`process_json_result_iterable`]
@@ -520,40 +229,6 @@ pub fn process_json_result_iterable_par<'a>(
         })
         .reduce(Stats::default, |a, b| a + b);
     spinner.finish();
-    stats
-}
-
-/// Main function processing the JSON data, collecting key information about the content.
-/// Multi-threaded version of [`process_json_iterable`].
-///
-/// See also [`process_json_iterable_par`]
-pub fn process_json_iterable_par<'a>(
-    settings: &Settings,
-    json_iter: impl ParallelIterator<Item = IdJSON> + 'a,
-    errors: &'a NDJSONErrorsPar,
-) -> Stats {
-    let args = &settings.args;
-    let spinner = make_spinner();
-    let json_iter = expand_jsonpath_query_par(settings, json_iter, errors);
-    let mut stats = json_iter
-        .fold(Stats::default, |mut acc, (_id, json)| {
-            spinner.inc(1);
-            count_json(&json, args, &mut acc);
-            acc
-        })
-        .reduce(Stats::default, |a, b| a + b);
-    spinner.finish();
-
-    for indexed_error in errors.container.lock().unwrap().as_slice() {
-        let IndexedNDJSONError { location, error } = indexed_error;
-        let location = location.to_owned();
-        match error {
-            NDJSONError::JSONParsingError(_) | NDJSONError::IOError(_) => {
-                stats.bad_lines.push(location)
-            }
-            NDJSONError::EmptyQuery => stats.empty_lines.push(location),
-        }
-    }
     stats
 }
 
@@ -610,7 +285,6 @@ mod tests {
     use serde_json::json;
 
     use super::*;
-    use std::fs::File;
     use std::io::{Seek, SeekFrom, Write};
 
     // TODO: How to test stdin?
@@ -696,88 +370,88 @@ mod tests {
 
     #[test]
     fn simple_ndjson() {
-        let mut tmpfile: File = tempfile::tempfile().unwrap();
+        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
         writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
         writeln!(tmpfile, r#"{{"key2": 123}}"#).unwrap();
         writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
         tmpfile.seek(SeekFrom::Start(0)).unwrap();
-        let reader = io::BufReader::new(tmpfile);
+        let path = tmpfile.path().to_path_buf();
 
-        let expected: Vec<IdJSON> = vec![
-            (1.to_string(), json!({"key1": 123})),
-            (2.to_string(), json!({"key2": 123})),
-            (3.to_string(), json!({"key1": 123})),
-        ];
-
-        let errors = Errors::default();
-
-        let json_iter = parse_ndjson_bufreader(reader, &errors);
-        assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
-        assert!(errors.container.borrow().is_empty())
+        let settings = Settings::init(Cli::default()).unwrap();
+        let stats = path.json_stats(&settings).unwrap();
+        assert_eq!(stats.line_count, 3);
+        assert!(stats.bad_lines.is_empty());
     }
 
     #[test]
     fn bad_ndjson_file() {
-        let mut tmpfile: File = tempfile::tempfile().unwrap();
+        let mut tmpfile = tempfile::NamedTempFile::new().unwrap();
         writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
         writeln!(tmpfile, r#"not valid json"#).unwrap();
         writeln!(tmpfile, r#"{{"key1": 123}}"#).unwrap();
         tmpfile.seek(SeekFrom::Start(0)).unwrap();
-        let reader = io::BufReader::new(tmpfile);
+        let path = tmpfile.path().to_path_buf();
 
-        let expected: Vec<IdJSON> = vec![
-            (1.to_string(), json!({"key1": 123})),
-            (3.to_string(), json!({"key1": 123})),
-        ];
-
-        let errors = Errors::default();
-
-        let json_iter = parse_ndjson_bufreader(reader, &errors);
-        assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
-        assert!(errors.container.borrow().len() == 1)
+        let settings = Settings::init(Cli::default()).unwrap();
+        let stats = path.json_stats(&settings).unwrap();
+        assert_eq!(stats.line_count, 2);
+        assert_eq!(stats.bad_lines, vec!["2".to_string()]);
     }
 
     #[test]
     fn simple_expand_jsonpath_query() {
-        let json_iter_in: Vec<IdJSON> = vec![
-            (1.to_string(), json!({"key1": [1, 2, 3]})),
-            (2.to_string(), json!({"key2": 123})),
-            (3.to_string(), json!({"key1": [4, 5]})),
+        let json_iter_in: Vec<IdJSONResult> = vec![
+            (1.to_string(), Ok(json!({"key1": [1, 2, 3]}))),
+            (2.to_string(), Ok(json!({"key2": 123}))),
+            (3.to_string(), Ok(json!({"key1": [4, 5]}))),
         ];
-        let json_iter_in = json_iter_in.iter().cloned();
+        let json_iter_in = json_iter_in.into_iter();
 
         let settings = Settings::init(Cli {
             jsonpath: Some("$.key1[*]".to_string()),
             ..Cli::default()
         })
         .unwrap();
-        let errors = Errors::default();
 
-        let expected: Vec<IdJSON> = vec![
-            ("1:$.key1[*][0]".to_string(), json!(1)),
-            ("1:$.key1[*][1]".to_string(), json!(2)),
-            ("1:$.key1[*][2]".to_string(), json!(3)),
-            ("3:$.key1[*][0]".to_string(), json!(4)),
-            ("3:$.key1[*][1]".to_string(), json!(5)),
+        let expected: Vec<IdJSONResult> = vec![
+            ("1:$.key1[*][0]".to_string(), Ok(json!(1))),
+            ("1:$.key1[*][1]".to_string(), Ok(json!(2))),
+            ("1:$.key1[*][2]".to_string(), Ok(json!(3))),
+            ("2:$.key1[*]".to_string(), Err(NDJSONError::EmptyQuery)),
+            ("3:$.key1[*][0]".to_string(), Ok(json!(4))),
+            ("3:$.key1[*][1]".to_string(), Ok(json!(5))),
         ];
 
-        let json_iter = expand_jsonpath_query(&settings, json_iter_in, &errors);
-        assert_eq!(expected, json_iter.collect::<Vec<IdJSON>>());
-        assert!(errors.container.borrow().len() == 1)
+        let json_iter = expand_jsonpath_query_result(&settings, json_iter_in);
+        let results: Vec<IdJSONResult> = json_iter.collect();
+        // Check non-error results match
+        let ok_results: Vec<(&String, &Value)> = results
+            .iter()
+            .filter_map(|(id, r)| r.as_ref().ok().map(|v| (id, v)))
+            .collect();
+        let expected_ok: Vec<(&String, &Value)> = expected
+            .iter()
+            .filter_map(|(id, r)| r.as_ref().ok().map(|v| (id, v)))
+            .collect();
+        assert_eq!(ok_results, expected_ok);
+        // Check empty query errors
+        let empty_count = results
+            .iter()
+            .filter(|(_, r)| matches!(r, Err(NDJSONError::EmptyQuery)))
+            .count();
+        assert_eq!(empty_count, 1);
     }
 
     #[test]
     fn simple_process_json_iterable() {
-        let json_iter_in: Vec<IdJSON> = vec![
-            (1.to_string(), json!({"key1": 123})),
-            (2.to_string(), json!({"key2": 123})),
-            (3.to_string(), json!({"key1": 123})),
+        let json_iter_in: Vec<IdJSONResult> = vec![
+            (1.to_string(), Ok(json!({"key1": 123}))),
+            (2.to_string(), Ok(json!({"key2": 123}))),
+            (3.to_string(), Ok(json!({"key1": 123}))),
         ];
-        let json_iter_in = json_iter_in.iter().cloned();
+        let json_iter_in = json_iter_in.into_iter();
 
-        let args = Cli::default();
-        let settings = Settings::init(args).unwrap();
-        let errors = Errors::default();
+        let settings = Settings::init(Cli::default()).unwrap();
 
         let expected = Stats {
             keys_count: IndexMap::from([("$.key1".to_string(), 2), ("$.key2".to_string(), 1)]),
@@ -789,9 +463,8 @@ mod tests {
             ..Default::default()
         };
 
-        let stats = process_json_iterable(&settings, json_iter_in, &errors);
+        let stats = process_json_result_iterable(&settings, json_iter_in);
         assert_eq!(expected, stats);
-        assert!(errors.container.borrow().is_empty())
     }
 
     #[test]
@@ -818,35 +491,6 @@ mod tests {
 
         let stats = process_json_result_iterable(&settings, json_iter_in);
         assert_eq!(expected, stats);
-    }
-
-    #[test]
-    fn bad_process_json_iterable_path_query() {
-        let json_iter_in: Vec<IdJSON> = vec![
-            (1.to_string(), json!({"key1": 123})),
-            (2.to_string(), json!({"key2": 123})),
-            (3.to_string(), json!({"key1": 123})),
-        ];
-        let json_iter_in = json_iter_in.iter().cloned();
-
-        let settings = Settings::init(Cli {
-            jsonpath: Some("$.key1".to_string()),
-            ..Cli::default()
-        })
-        .unwrap();
-        let errors = Errors::default();
-
-        let expected = Stats {
-            keys_count: IndexMap::from([("$".to_string(), 2)]),
-            line_count: 2,
-            keys_types_count: IndexMap::from([("$::Number".to_string(), 2)]),
-            empty_lines: vec![2.to_string()],
-            ..Default::default()
-        };
-
-        let stats = process_json_iterable(&settings, json_iter_in, &errors);
-        assert_eq!(expected, stats);
-        assert!(errors.container.borrow().len() == 1)
     }
 
     #[test]
@@ -878,10 +522,10 @@ mod tests {
 
     #[test]
     fn simple_process_json_iterable_par() {
-        let iter: Vec<(String, Value)> = vec![
-            (1.to_string(), json!({"key1": 123})),
-            (2.to_string(), json!({"key2": 123})),
-            (3.to_string(), json!({"key1": 123})),
+        let iter: Vec<IdJSONResult> = vec![
+            (1.to_string(), Ok(json!({"key1": 123}))),
+            (2.to_string(), Ok(json!({"key2": 123}))),
+            (3.to_string(), Ok(json!({"key1": 123}))),
         ];
         let iter = iter.into_iter().par_bridge();
 
@@ -895,19 +539,17 @@ mod tests {
             ..Default::default()
         };
 
-        let args = Cli::default();
-        let settings = Settings::init(args).unwrap();
-        let errors = ErrorsPar::default();
-        let stats = process_json_iterable_par(&settings, iter, &errors);
+        let settings = Settings::init(Cli::default()).unwrap();
+        let stats = process_json_result_iterable_par(&settings, iter);
         assert_eq!(expected, stats);
     }
 
     #[test]
     fn simple_process_json_iterable_par_jsonpath() {
-        let iter: Vec<(String, Value)> = vec![
-            (1.to_string(), json!({"key1": 123})),
-            (2.to_string(), json!({"a": {"key2": 123}})),
-            (3.to_string(), json!({"key1": 123})),
+        let iter: Vec<IdJSONResult> = vec![
+            (1.to_string(), Ok(json!({"key1": 123}))),
+            (2.to_string(), Ok(json!({"a": {"key2": 123}}))),
+            (3.to_string(), Ok(json!({"key1": 123}))),
         ];
         let iter = iter.into_iter().par_bridge();
 
@@ -924,8 +566,7 @@ mod tests {
             ..Cli::default()
         })
         .unwrap();
-        let errors = ErrorsPar::default();
-        let mut stats = process_json_iterable_par(&settings, iter, &errors);
+        let mut stats = process_json_result_iterable_par(&settings, iter);
         stats.empty_lines.sort_by(|a, b| {
             a.parse::<usize>()
                 .unwrap()

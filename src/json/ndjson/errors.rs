@@ -1,7 +1,5 @@
 use thiserror::Error;
 
-pub mod collection;
-
 /// Wrapper around the various errors we can encounter while processing the data
 #[derive(Error, Debug)]
 pub enum NDJSONError {
