@@ -1,0 +1,15 @@
+{"id": 1, "tags": ["a", "b", "c"], "scores": [1, 2, 3], "nested": [[1, 2], [3, 4]]}
+{"id": 2, "tags": [], "matrix": [[1, 0], [0, 1]]}
+{"id": 3, "items": [{"name": "x", "value": 10}, {"name": "y", "value": 20}], "flags": [true, false, true]}
+{"id": 4, "tags": ["single"], "data": [42]}
+{"id": 5, "long_array": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15], "empty": []}
+{"id": 6, "items": [{"name": "a", "value": 1, "meta": {"type": "alpha"}}, {"name": "b", "value": 2}]}
+{"id": 7, "nested_deep": [[[1, 2], [3]], [[4, 5]]], "tags": ["x", "y"]}
+{"id": 8, "mixed": [1, "two", true, null, {"key": "val"}], "tags": []}
+{"id": 9, "tags": ["alpha", "beta", "gamma", "delta"], "counts": [100, 200, 300]}
+{"id": 10, "items": [], "scores": [9.5, 8.3, 7.1]}
+{"id": 11, "data": [[{"id": 1, "v": "a"}, {"id": 2, "v": "b"}], [{"id": 3, "v": "c"}]]}
+{"id": 12, "tags": ["only"], "matrix": [[1, 2, 3], [4, 5, 6], [7, 8, 9]]}
+{"id": 13, "items": [{"name": "p", "tags": ["x", "y"]}, {"name": "q", "tags": ["z"]}]}
+{"id": 14, "values": [null, null, 1, 2, null], "flags": [false, true]}
+{"id": 15, "tags": ["a", "b"], "nested_objects": [{"a": 1, "b": 2}, {"c": 3}]}

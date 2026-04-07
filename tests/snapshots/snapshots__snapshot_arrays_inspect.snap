@@ -1,0 +1,61 @@
+---
+source: tests/snapshots.rs
+expression: stats
+---
+{
+  "keys_count": {
+    "$.id": 15,
+    "$.nested[*][*]": 4,
+    "$.scores[*]": 6,
+    "$.tags[*]": 13,
+    "$.matrix[*][*]": 13,
+    "$.flags[*]": 5,
+    "$.items[*].name": 6,
+    "$.items[*].value": 4,
+    "$.data[*]": 1,
+    "$.long_array[*]": 15,
+    "$.items[*].meta.type": 1,
+    "$.nested_deep[*][*][*]": 5,
+    "$.mixed[*]": 4,
+    "$.mixed[*].key": 1,
+    "$.counts[*]": 3,
+    "$.data[*][*].id": 3,
+    "$.data[*][*].v": 3,
+    "$.items[*].tags[*]": 3,
+    "$.values[*]": 5,
+    "$.nested_objects[*].a": 1,
+    "$.nested_objects[*].b": 1,
+    "$.nested_objects[*].c": 1
+  },
+  "line_count": 15,
+  "bad_lines": [],
+  "keys_types_count": {
+    "$.id::Number": 15,
+    "$.nested[*][*]::Number": 4,
+    "$.scores[*]::Number": 6,
+    "$.tags[*]::String": 13,
+    "$.matrix[*][*]::Number": 13,
+    "$.flags[*]::Bool": 5,
+    "$.items[*].name::String": 6,
+    "$.items[*].value::Number": 4,
+    "$.data[*]::Number": 1,
+    "$.long_array[*]::Number": 15,
+    "$.items[*].meta.type::String": 1,
+    "$.nested_deep[*][*][*]::Number": 5,
+    "$.mixed[*]::Number": 1,
+    "$.mixed[*]::String": 1,
+    "$.mixed[*]::Bool": 1,
+    "$.mixed[*]::Null": 1,
+    "$.mixed[*].key::String": 1,
+    "$.counts[*]::Number": 3,
+    "$.data[*][*].id::Number": 3,
+    "$.data[*][*].v::String": 3,
+    "$.items[*].tags[*]::String": 3,
+    "$.values[*]::Null": 3,
+    "$.values[*]::Number": 2,
+    "$.nested_objects[*].a::Number": 1,
+    "$.nested_objects[*].b::Number": 1,
+    "$.nested_objects[*].c::Number": 1
+  },
+  "empty_lines": []
+}

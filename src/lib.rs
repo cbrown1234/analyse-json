@@ -43,18 +43,18 @@ pub struct Cli {
 
     /// JSONpath query to filter/limit the inspection to e.g. `'$.a_key.an_array[0]'`
     #[clap(long)]
-    jsonpath: Option<String>,
+    pub jsonpath: Option<String>,
 
     /// Walk the elements of arrays grouping elements paths together under `$.path.to.array[*]`?
     /// See also `--explode-arrays`
     #[clap(long)]
-    inspect_arrays: bool,
+    pub inspect_arrays: bool,
 
     /// Walk the elements of arrays treating arrays like a map of their enumerated elements?
     /// (E.g. $.path.to.array[0], $.path.to.array[1], ...)
     /// See also `--inspect-arrays`
     #[clap(long, conflicts_with = "inspect_arrays")]
-    explode_arrays: bool,
+    pub explode_arrays: bool,
 
     /// Include combined results for all files when using glob
     #[clap(long)]
@@ -62,7 +62,7 @@ pub struct Cli {
 
     /// Use multi-threaded version of the processing
     #[clap(long)]
-    parallel: bool,
+    pub parallel: bool,
 
     /// Silence error logging
     #[clap(short, long)]
@@ -93,7 +93,7 @@ pub struct Settings {
 }
 
 impl Settings {
-    fn init(args: Cli) -> Result<Self> {
+    pub fn init(args: Cli) -> Result<Self> {
         let jsonpath_selector = args.jsonpath_selector()?;
         Ok(Self {
             args,

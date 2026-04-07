@@ -1,0 +1,33 @@
+{"id": 1, "name": "Alice", "age": 30, "active": true, "score": 9.5, "tags": ["admin", "user"], "address": {"city": "London", "country": "UK"}}
+{"id": 2, "name": "Bob", "age": 25, "active": false, "score": 7.2, "tags": ["user"], "address": {"city": "Paris", "country": "FR"}, "metadata": {"created": "2024-01-01", "version": 2}}
+{"id": 3, "name": "Charlie", "age": 35, "active": true, "score": null, "address": {"city": "Berlin", "country": "DE", "postcode": "10115"}}
+{"id": 4, "name": "Diana", "age": 28, "active": true, "tags": ["admin"], "metadata": {"created": "2024-02-15", "version": 1, "flags": {"beta": true, "premium": false}}}
+{"id": 5, "name": "Eve", "active": false, "score": 8.8, "tags": [], "address": {"city": "Madrid", "country": "ES"}}
+not valid json line
+{"id": 6, "name": "Frank", "age": 42, "active": true, "score": 6.1, "address": {"city": "Rome", "country": "IT"}, "tags": ["user", "moderator"]}
+{"id": 7, "name": "Grace", "age": 31, "active": true, "tags": ["user"], "metadata": {"created": "2024-03-01", "version": 3}}
+{"id": 8, "name": "Henry", "age": 19, "active": false, "score": 5.5, "address": {"city": "Amsterdam", "country": "NL"}}
+{"id": 9, "name": "Iris", "age": 55, "active": true, "score": 9.9, "tags": ["admin", "user", "moderator"], "address": {"city": "Vienna", "country": "AT"}, "metadata": {"created": "2023-12-01", "version": 4, "flags": {"beta": false, "premium": true}}}
+{"id": 10, "name": "Jack", "age": 22, "active": true, "score": 7.7}
+{"id": 11, "name": "Karen", "active": false, "tags": ["user"], "address": {"city": "Warsaw", "country": "PL"}}
+{"id": 12, "name": "Leo", "age": 47, "active": true, "score": 8.3, "address": {"city": "Prague", "country": "CZ"}, "metadata": {"created": "2024-04-10", "version": 1}}
+{"id": 13, "name": "Mia", "age": 33, "active": true, "score": null, "tags": ["user"], "metadata": {"created": "2024-05-20", "version": 2, "flags": {"beta": true, "premium": true}}}
+{"id": 14, "name": "Noah", "age": 26, "active": false, "address": {"city": "Stockholm", "country": "SE"}}
+{"id": 15, "name": "Olivia", "age": 38, "active": true, "score": 9.1, "tags": ["admin"], "address": {"city": "Oslo", "country": "NO"}}
+{}
+{"id": 16, "name": "Paul", "age": 44, "active": true, "score": 6.8, "tags": ["user"], "metadata": {"created": "2024-06-01", "version": 1}}
+{"id": 17, "name": "Quinn", "age": 29, "active": true, "score": 8.0, "address": {"city": "Helsinki", "country": "FI"}, "tags": ["user", "moderator"]}
+{"id": 18, "name": "Rachel", "active": false, "score": 7.5, "tags": [], "metadata": {"created": "2024-07-15", "version": 5}}
+{"id": 19, "name": "Sam", "age": 52, "active": true, "address": {"city": "Dublin", "country": "IE"}}
+{"id": 20, "name": "Tina", "age": 36, "active": true, "score": 9.3, "tags": ["admin", "user"], "address": {"city": "Lisbon", "country": "PT"}, "metadata": {"created": "2024-08-01", "version": 2, "flags": {"beta": false, "premium": false}}}
+{"id": 21, "name": "Uma", "age": 24, "active": false, "score": 6.4, "tags": ["user"]}
+{"id": 22, "name": "Victor", "age": 61, "active": true, "score": null, "address": {"city": "Athens", "country": "GR"}}
+{"id": 23, "name": "Wendy", "age": 27, "active": true, "score": 8.6, "tags": ["admin"], "metadata": {"created": "2024-09-10", "version": 3}}
+{"id": 24, "name": "Xander", "active": true, "address": {"city": "Budapest", "country": "HU"}, "tags": ["user", "moderator"]}
+{"id": 25, "name": "Yara", "age": 34, "active": false, "score": 7.9}
+another bad line here
+{"id": 26, "name": "Zack", "age": 45, "active": true, "score": 8.2, "tags": ["admin", "user"], "address": {"city": "Bucharest", "country": "RO"}, "metadata": {"created": "2024-10-01", "version": 1}}
+{"id": 27, "name": "Amy", "age": 23, "active": true, "score": 9.0, "address": {"city": "Sofia", "country": "BG"}}
+{"id": 28, "name": "Ben", "active": false, "tags": ["user"], "metadata": {"created": "2024-11-01", "version": 2}}
+{"id": 29, "name": "Clara", "age": 39, "active": true, "score": 7.4, "tags": ["user", "moderator"], "address": {"city": "Zagreb", "country": "HR"}}
+{"id": 30, "name": "David", "age": 48, "active": true, "score": 8.9, "address": {"city": "Ljubljana", "country": "SI"}, "metadata": {"created": "2024-12-01", "version": 4, "flags": {"beta": true, "premium": false}}}

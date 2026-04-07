@@ -1,0 +1,70 @@
+---
+source: tests/snapshots.rs
+expression: stats.to_string()
+---
+Keys:
+[
+    "$.active",
+    "$.address.city",
+    "$.address.country",
+    "$.age",
+    "$.id",
+    "$.name",
+    "$.score",
+    "$.tags",
+    "$.metadata.created",
+    "$.metadata.version",
+    "$.address.postcode",
+    "$.metadata.flags.beta",
+    "$.metadata.flags.premium",
+]
+
+Key occurance counts:
+{
+    "$.active": 30,
+    "$.address.city": 20,
+    "$.address.country": 20,
+    "$.age": 25,
+    "$.id": 30,
+    "$.name": 30,
+    "$.score": 23,
+    "$.tags": 20,
+    "$.metadata.created": 13,
+    "$.metadata.version": 13,
+    "$.address.postcode": 1,
+    "$.metadata.flags.beta": 5,
+    "$.metadata.flags.premium": 5,
+}
+
+Key occurance rate:
+$.active: 96.774%
+$.address.city: 64.516%
+$.address.country: 64.516%
+$.age: 80.645%
+$.id: 96.774%
+$.name: 96.774%
+$.score: 74.194%
+$.tags: 64.516%
+$.metadata.created: 41.935%
+$.metadata.version: 41.935%
+$.address.postcode: 3.226%
+$.metadata.flags.beta: 16.129%
+$.metadata.flags.premium: 16.129%
+
+Key type occurance rate:
+$.active::Bool: 96.774%
+$.address.city::String: 64.516%
+$.address.country::String: 64.516%
+$.age::Number: 80.645%
+$.id::Number: 96.774%
+$.name::String: 96.774%
+$.score::Number: 64.516%
+$.tags::Array: 64.516%
+$.metadata.created::String: 41.935%
+$.metadata.version::Number: 41.935%
+$.address.postcode::String: 3.226%
+$.score::Null: 9.677%
+$.metadata.flags.beta::Bool: 16.129%
+$.metadata.flags.premium::Bool: 16.129%
+Corrupted lines:
+["28", "6"]

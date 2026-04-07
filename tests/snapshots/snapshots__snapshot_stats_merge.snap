@@ -1,0 +1,69 @@
+---
+source: tests/snapshots.rs
+expression: merged
+---
+{
+  "keys_count": {
+    "$.active": 30,
+    "$.address.city": 20,
+    "$.address.country": 20,
+    "$.age": 25,
+    "$.id": 45,
+    "$.name": 30,
+    "$.score": 23,
+    "$.tags": 28,
+    "$.metadata.created": 13,
+    "$.metadata.version": 13,
+    "$.address.postcode": 1,
+    "$.metadata.flags.beta": 5,
+    "$.metadata.flags.premium": 5,
+    "$.nested": 1,
+    "$.scores": 2,
+    "$.matrix": 2,
+    "$.flags": 2,
+    "$.items": 4,
+    "$.data": 2,
+    "$.empty": 1,
+    "$.long_array": 1,
+    "$.nested_deep": 1,
+    "$.mixed": 1,
+    "$.counts": 1,
+    "$.values": 1,
+    "$.nested_objects": 1
+  },
+  "line_count": 46,
+  "bad_lines": [
+    "file1.ndjson:28",
+    "file1.ndjson:6"
+  ],
+  "keys_types_count": {
+    "$.active::Bool": 30,
+    "$.address.city::String": 20,
+    "$.address.country::String": 20,
+    "$.age::Number": 25,
+    "$.id::Number": 45,
+    "$.name::String": 30,
+    "$.score::Number": 20,
+    "$.tags::Array": 28,
+    "$.metadata.created::String": 13,
+    "$.metadata.version::Number": 13,
+    "$.address.postcode::String": 1,
+    "$.score::Null": 3,
+    "$.metadata.flags.beta::Bool": 5,
+    "$.metadata.flags.premium::Bool": 5,
+    "$.nested::Array": 1,
+    "$.scores::Array": 2,
+    "$.matrix::Array": 2,
+    "$.flags::Array": 2,
+    "$.items::Array": 4,
+    "$.data::Array": 2,
+    "$.empty::Array": 1,
+    "$.long_array::Array": 1,
+    "$.nested_deep::Array": 1,
+    "$.mixed::Array": 1,
+    "$.counts::Array": 1,
+    "$.values::Array": 1,
+    "$.nested_objects::Array": 1
+  },
+  "empty_lines": []
+}

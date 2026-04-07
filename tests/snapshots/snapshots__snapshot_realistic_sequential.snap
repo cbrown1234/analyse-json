@@ -1,0 +1,43 @@
+---
+source: tests/snapshots.rs
+expression: stats
+---
+{
+  "keys_count": {
+    "$.active": 30,
+    "$.address.city": 20,
+    "$.address.country": 20,
+    "$.age": 25,
+    "$.id": 30,
+    "$.name": 30,
+    "$.score": 23,
+    "$.tags": 20,
+    "$.metadata.created": 13,
+    "$.metadata.version": 13,
+    "$.address.postcode": 1,
+    "$.metadata.flags.beta": 5,
+    "$.metadata.flags.premium": 5
+  },
+  "line_count": 31,
+  "bad_lines": [
+    "28",
+    "6"
+  ],
+  "keys_types_count": {
+    "$.active::Bool": 30,
+    "$.address.city::String": 20,
+    "$.address.country::String": 20,
+    "$.age::Number": 25,
+    "$.id::Number": 30,
+    "$.name::String": 30,
+    "$.score::Number": 20,
+    "$.tags::Array": 20,
+    "$.metadata.created::String": 13,
+    "$.metadata.version::Number": 13,
+    "$.address.postcode::String": 1,
+    "$.score::Null": 3,
+    "$.metadata.flags.beta::Bool": 5,
+    "$.metadata.flags.premium::Bool": 5
+  },
+  "empty_lines": []
+}

@@ -16,4 +16,13 @@ build:
 
 generate-test-data:
   mkdir -p test_data_large
-  for i in $(seq 100000); do cat test_data/some_data_3.json >> test_data_large/some_data_3.json; done
+  for i in $(seq 250000); do cat test_data/realistic.ndjson >> test_data_large/realistic.ndjson; done
+
+bench:
+  cargo bench
+
+bench-save NAME:
+  cargo bench -- --save-baseline {{NAME}}
+
+bench-compare NAME:
+  cargo bench -- --baseline {{NAME}}

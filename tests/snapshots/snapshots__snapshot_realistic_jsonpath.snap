@@ -1,0 +1,34 @@
+---
+source: tests/snapshots.rs
+expression: stats
+---
+{
+  "keys_count": {
+    "$.city": 20,
+    "$.country": 20,
+    "$.postcode": 1
+  },
+  "line_count": 20,
+  "bad_lines": [
+    "28",
+    "6"
+  ],
+  "keys_types_count": {
+    "$.city::String": 20,
+    "$.country::String": 20,
+    "$.postcode::String": 1
+  },
+  "empty_lines": [
+    "11",
+    "14",
+    "17",
+    "18",
+    "20",
+    "23",
+    "25",
+    "27",
+    "31",
+    "4",
+    "8"
+  ]
+}
