@@ -183,7 +183,7 @@ pub fn run(args: Cli) -> Result<()> {
         run_stdin(settings).context("Failed to process stdin")?;
     } else if settings.args == Cli::default() {
         let mut cmd = Cli::command();
-        cmd.print_help().context("Failed to pring CLI help")?;
+        cmd.print_help().context("Failed to print CLI help")?;
         return Ok(());
     } else {
         run_no_stdin(settings).context("Failed to process file(s)")?;

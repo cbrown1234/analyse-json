@@ -37,7 +37,6 @@ owo-colors = { version = "4", features = ["supports-colors"]}
 serde = { version = "1.0", features = ["derive"] }
 clap_complete = "4"
 indicatif = { version = "0.17.11", features = ["rayon"] }
-log = "0.4.27"
 env_logger = "0.10.2"
 thiserror = "2.0.12"
 anyhow = "1.0.98"

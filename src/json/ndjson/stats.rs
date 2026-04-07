@@ -19,16 +19,6 @@ pub struct Stats {
 }
 
 impl Stats {
-    pub fn new() -> Stats {
-        Stats {
-            keys_count: IndexMap::new(),
-            line_count: 0,
-            bad_lines: Vec::new(),
-            keys_types_count: IndexMap::new(),
-            empty_lines: Vec::new(),
-        }
-    }
-
     pub fn key_occurance(&self) -> IndexMap<String, f64> {
         self.keys_count
             .iter()
