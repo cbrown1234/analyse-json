@@ -26,6 +26,6 @@
 - ~~Shell completion support~~
   - ~~Runtime creation~~
   - Build time creating
-- CI/CD on github
+- ~~CI on github~~ (test/fmt/clippy/MSRV workflow; CD/release automation still TODO)
 - Review for comparison / reuse:
   - https://github.com/v0ldek/rsonpath

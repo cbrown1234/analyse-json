@@ -2,8 +2,8 @@
 name = "analyse-json"
 version = "0.6.1"
 authors = ["Chris Brown <cbrown1234@hotmail.co.uk>"]
-edition = "2021"
-rust-version = "1.70"
+edition = "2024"
+rust-version = "1.85"
 license = "MIT"
 readme = "README.md"
 description = """
@@ -24,7 +24,6 @@ exclude = [
 
 [dependencies]
 serde_json = "1.0"
-itertools = "0.14"
 clap = { version = "4", features = ["derive"] }
 glob = "0.3"
 indexmap = { version = "2.9.0", features = ["serde"] }
@@ -36,9 +35,8 @@ grep-cli = "0.1"
 owo-colors = { version = "4", features = ["supports-colors"]}
 serde = { version = "1.0", features = ["derive"] }
 clap_complete = "4"
-indicatif = { version = "0.17.11", features = ["rayon"] }
-log = "0.4.27"
-env_logger = "0.10.2"
+indicatif = { version = "0.18", features = ["rayon"] }
+env_logger = "0.11"
 thiserror = "2.0.12"
 anyhow = "1.0.98"
 serde_json_path = "0.7.2"

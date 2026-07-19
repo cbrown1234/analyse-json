@@ -137,7 +137,7 @@ where
 }
 
 pub trait ValuePaths {
-    fn value_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<ValuePath>;
+    fn value_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<ValuePath<'_>>;
 }
 
 impl ValuePaths for Value {
@@ -147,7 +147,7 @@ impl ValuePaths for Value {
     /// with [`ValuePath::jsonpath`]
     ///
     /// See also [`Value::json_paths`] from [`JSONPaths`]
-    fn value_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<ValuePath> {
+    fn value_paths(&self, explode_array: bool, inspect_arrays: bool) -> Vec<ValuePath<'_>> {
         let base_valuepath = ValuePath::new(self, None);
         base_valuepath.value_paths(explode_array, inspect_arrays)
     }

@@ -9,11 +9,11 @@ use crate::json::paths::ValuePaths;
 use crate::json::{Value, ValueType};
 use crate::{Cli, Settings};
 
+use self::errors::NDJSONError;
 use self::errors::collection::{
     Errors, ErrorsPar, IndexedNDJSONError, IntoEnumeratedErrFiltered, IntoErrFiltered,
     NDJSONProcessingErrors,
 };
-use self::errors::NDJSONError;
 pub use self::stats::{FileStats, Stats};
 
 use dashmap::DashMap;
@@ -28,9 +28,9 @@ use std::io::{self, prelude::*};
 use std::iter::Zip;
 use std::ops::RangeFrom;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
-use std::sync::Mutex;
 
 // Reusable types for function signatures
 type IJSONCandidate = (usize, String);
@@ -100,6 +100,17 @@ impl<'a, T: Iterator<Item = io::Result<String>> + Send + 'a> ToNDJSONPar<'a> for
             )
         })
     }
+}
+
+/// Progress spinner for the processing loops, hidden when `--quiet` is set
+fn progress_spinner(args: &Cli) -> ProgressBar {
+    if args.quiet {
+        return ProgressBar::hidden();
+    }
+    ProgressBar::new_spinner().with_style(
+        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
+            .unwrap(),
+    )
 }
 
 // TODO: Consider switching to match _par implementation without Box<_> (needs benchmarking)
@@ -254,7 +265,7 @@ pub fn parse_ndjson_receiver_par<'a>(
     args: &Cli,
     receiver: Receiver<String>,
     errors: &'a NDJSONErrorsPar,
-) -> impl ParallelIterator<Item = IdJSON> + 'a {
+) -> impl ParallelIterator<Item = IdJSON> + 'a + use<'a> {
     let receiver = receiver.into_iter().indexed();
     parse_ndjson_iter_par(args, receiver, errors)
 }
@@ -270,7 +281,7 @@ pub fn parse_ndjson_bufreader_par<'a>(
     args: &Cli,
     file_path: &PathBuf,
     errors: &'a NDJSONErrorsPar,
-) -> Result<impl ParallelIterator<Item = IdJSON> + 'a, NDJSONError> {
+) -> Result<impl ParallelIterator<Item = IdJSON> + 'a + use<'a>, NDJSONError> {
     let reader = get_bufreader(args, file_path)?;
 
     let iter = reader.lines().enumerate();
@@ -298,11 +309,14 @@ pub fn parse_ndjson_bufreader_par<'a>(
 /// and filters out data that does not parse as JSON to the `errors` container.
 ///
 /// See also: [`parse_ndjson_receiver_par`] & [`parse_ndjson_bufreader_par`]
-pub fn parse_ndjson_iter_par<'a>(
+pub fn parse_ndjson_iter_par<'a, I>(
     args: &Cli,
-    iter: impl Iterator<Item = IJSONCandidate> + Send + 'a,
+    iter: I,
     errors: &'a NDJSONErrorsPar,
-) -> impl ParallelIterator<Item = IdJSON> + 'a {
+) -> impl ParallelIterator<Item = IdJSON> + use<'a, I>
+where
+    I: Iterator<Item = IJSONCandidate> + Send + 'a,
+{
     let iter = iter.take(args.lines.unwrap_or(usize::MAX));
 
     let json_iter = iter.par_bridge().map(|(i, json_candidate)| {
@@ -468,7 +482,7 @@ pub fn apply_settings_par<'a>(
     expand_jsonpath_query_par(settings, json_iter, errors)
 }
 
-/// Main function processing the JSON data, collecting key infomation about the content.
+/// Main function processing the JSON data, collecting key information about the content.
 /// Single threaded.
 ///
 /// See also [`process_json_result_iterable_par`]
@@ -482,10 +496,7 @@ pub fn process_json_result_iterable(
     let json_iter = limit(args, json_iter);
     let json_iter = expand_jsonpath_query_result(settings, json_iter);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = progress_spinner(args);
 
     let mut path_type = String::with_capacity(100);
     for (id, json_result) in json_iter {
@@ -526,7 +537,7 @@ pub fn process_json_result_iterable(
     fs
 }
 
-/// Main function processing the JSON data, collecting key infomation about the content.
+/// Main function processing the JSON data, collecting key information about the content.
 /// Single threaded.
 ///
 /// See also [`process_json_iterable_par`]
@@ -540,10 +551,7 @@ pub fn process_json_iterable(
 
     let json_iter = apply_settings(settings, json_iter, errors);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = progress_spinner(args);
 
     for (_id, json) in json_iter {
         spinner.inc(1);
@@ -591,10 +599,7 @@ pub fn process_json_result_iterable_par<'a>(
 
     let json_iter = expand_jsonpath_query_result_par(settings, json_iter);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = progress_spinner(args);
 
     let bad_lines = Mutex::new(Vec::default());
     let empty_lines = Mutex::new(Vec::default());
@@ -646,8 +651,8 @@ pub fn process_json_result_iterable_par<'a>(
     fs
 }
 
-/// Main function processing the JSON data, collecting key infomation about the content.
-/// Mulit-threaded version of [`process_json_iterable`].
+/// Main function processing the JSON data, collecting key information about the content.
+/// Multi-threaded version of [`process_json_iterable`].
 ///
 /// See also [`process_json_iterable_par`]
 pub fn process_json_iterable_par<'a>(
@@ -664,10 +669,7 @@ pub fn process_json_iterable_par<'a>(
 
     let json_iter = apply_settings_par(settings, json_iter, errors);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = progress_spinner(args);
 
     json_iter.for_each(|(_id, json)| {
         line_count.fetch_add(1, Ordering::Release);
@@ -731,7 +733,7 @@ where
 ///
 /// See also [`limit`]
 #[deprecated(note = "Superseded by `apply_settings`")]
-pub fn parse_iter<E, I>(args: &Cli, iter: I) -> impl Iterator<Item = Result<String, E>>
+pub fn parse_iter<E, I>(args: &Cli, iter: I) -> impl Iterator<Item = Result<String, E>> + use<E, I>
 where
     I: Iterator<Item = Result<String, E>>,
 {
@@ -862,8 +864,10 @@ mod tests {
             empty_lines: vec![],
         };
 
-        let mut args = Cli::default();
-        args.parallel = true;
+        let args = Cli {
+            parallel: true,
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
 
         let actual = path.json_stats(&settings).unwrap();
@@ -924,8 +928,10 @@ mod tests {
         ];
         let json_iter_in = json_iter_in.iter().cloned();
 
-        let mut args = Cli::default();
-        args.jsonpath = Some("$.key1[*]".to_string());
+        let args = Cli {
+            jsonpath: Some("$.key1[*]".to_string()),
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
         let errors = Errors::default();
 
@@ -1005,8 +1011,10 @@ mod tests {
         ];
         let json_iter_in = json_iter_in.iter().cloned();
 
-        let mut args = Cli::default();
-        args.jsonpath = Some("$.key1".to_string());
+        let args = Cli {
+            jsonpath: Some("$.key1".to_string()),
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
         let errors = Errors::default();
 
@@ -1032,8 +1040,10 @@ mod tests {
         ];
         let json_iter_in = json_iter_in.into_iter();
 
-        let mut args = Cli::default();
-        args.jsonpath = Some("$.key1".to_string());
+        let args = Cli {
+            jsonpath: Some("$.key1".to_string()),
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
 
         let expected = Stats {
@@ -1091,8 +1101,10 @@ mod tests {
             ..Default::default()
         };
 
-        let mut args = Cli::default();
-        args.jsonpath = Some("$.a".to_string());
+        let args = Cli {
+            jsonpath: Some("$.a".to_string()),
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
         let errors = ErrorsPar::default();
         let mut stats = process_json_iterable_par(&settings, iter, &errors);
@@ -1148,7 +1160,7 @@ mod tests {
             empty_lines: vec!["file/1.json:5".to_string(), "file/2.json:2".to_string()],
         };
 
-        let vec_of_file_stats = vec![lhs.clone(), rhs.clone()];
+        let vec_of_file_stats = [lhs.clone(), rhs.clone()];
         let actual_ref = lhs.clone() + &rhs;
         let actual = lhs + rhs;
 
