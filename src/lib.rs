@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
-use clap::builder::styling::AnsiColor;
-use clap::builder::Styles;
 use clap::CommandFactory;
 use clap::Parser;
+use clap::builder::Styles;
+use clap::builder::styling::AnsiColor;
 use clap_complete::Shell;
 use glob::glob;
 use grep_cli::is_readable_stdin;

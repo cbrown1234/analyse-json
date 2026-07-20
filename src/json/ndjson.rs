@@ -9,11 +9,11 @@ use crate::json::paths::ValuePaths;
 use crate::json::{Value, ValueType};
 use crate::{Cli, Settings};
 
+use self::errors::NDJSONError;
 use self::errors::collection::{
     Errors, ErrorsPar, IndexedNDJSONError, IntoEnumeratedErrFiltered, IntoErrFiltered,
     NDJSONProcessingErrors,
 };
-use self::errors::NDJSONError;
 pub use self::stats::{FileStats, Stats};
 
 use dashmap::DashMap;
@@ -28,9 +28,9 @@ use std::io::{self, prelude::*};
 use std::iter::Zip;
 use std::ops::RangeFrom;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::Receiver;
-use std::sync::Mutex;
 
 // Reusable types for function signatures
 type IJSONCandidate = (usize, String);
@@ -254,7 +254,7 @@ pub fn parse_ndjson_receiver_par<'a>(
     args: &Cli,
     receiver: Receiver<String>,
     errors: &'a NDJSONErrorsPar,
-) -> impl ParallelIterator<Item = IdJSON> + 'a {
+) -> impl ParallelIterator<Item = IdJSON> + use<'a> {
     let receiver = receiver.into_iter().indexed();
     parse_ndjson_iter_par(args, receiver, errors)
 }
@@ -270,7 +270,7 @@ pub fn parse_ndjson_bufreader_par<'a>(
     args: &Cli,
     file_path: &PathBuf,
     errors: &'a NDJSONErrorsPar,
-) -> Result<impl ParallelIterator<Item = IdJSON> + 'a, NDJSONError> {
+) -> Result<impl ParallelIterator<Item = IdJSON> + use<'a>, NDJSONError> {
     let reader = get_bufreader(args, file_path)?;
 
     let iter = reader.lines().enumerate();
@@ -298,11 +298,14 @@ pub fn parse_ndjson_bufreader_par<'a>(
 /// and filters out data that does not parse as JSON to the `errors` container.
 ///
 /// See also: [`parse_ndjson_receiver_par`] & [`parse_ndjson_bufreader_par`]
-pub fn parse_ndjson_iter_par<'a>(
+pub fn parse_ndjson_iter_par<'a, I>(
     args: &Cli,
-    iter: impl Iterator<Item = IJSONCandidate> + Send + 'a,
+    iter: I,
     errors: &'a NDJSONErrorsPar,
-) -> impl ParallelIterator<Item = IdJSON> + 'a {
+) -> impl ParallelIterator<Item = IdJSON> + use<'a, I>
+where
+    I: Iterator<Item = IJSONCandidate> + Send + 'a,
+{
     let iter = iter.take(args.lines.unwrap_or(usize::MAX));
 
     let json_iter = iter.par_bridge().map(|(i, json_candidate)| {
@@ -731,7 +734,7 @@ where
 ///
 /// See also [`limit`]
 #[deprecated(note = "Superseded by `apply_settings`")]
-pub fn parse_iter<E, I>(args: &Cli, iter: I) -> impl Iterator<Item = Result<String, E>>
+pub fn parse_iter<E, I>(args: &Cli, iter: I) -> impl Iterator<Item = Result<String, E>> + use<E, I>
 where
     I: Iterator<Item = Result<String, E>>,
 {
