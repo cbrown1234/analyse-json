@@ -33,7 +33,7 @@ impl fmt::Display for IndexedNDJSONError {
     }
 }
 
-/// Threadsafe storage for errors enounter by parallel processing.
+/// Threadsafe storage for errors encountered by parallel processing.
 /// Counterpart to [`Errors`]
 #[derive(Debug)]
 pub struct ErrorsPar<E> {
@@ -86,7 +86,7 @@ impl<E: Display> NDJSONProcessingErrors for ErrorsPar<E> {
 }
 
 // TODO: Create ErrorContainer Trait?
-/// Storage for errors enounter by processing
+/// Storage for errors encountered by processing
 /// Counterpart to [`ErrorsPar`]
 #[derive(Debug)]
 pub struct Errors<E> {

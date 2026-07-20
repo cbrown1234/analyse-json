@@ -9,11 +9,13 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Migrated to Rust edition 2024 (MSRV is now 1.85)
+- Renamed `Stats::key_occurance`/`key_type_occurance` to `key_occurrence`/`key_type_occurrence` (typo fix, breaking for library users)
 
 ### Fixed
 
 - Corrected MSRV
 - Clippy lints (elided lifetimes, `field_reassign_with_default`, `useless_vec`)
+- Typos in CLI error messages, terminal output and documentation
 
 ## [0.6.1] - 2024-01-20
 
