@@ -265,7 +265,7 @@ pub fn parse_ndjson_receiver_par<'a>(
     args: &Cli,
     receiver: Receiver<String>,
     errors: &'a NDJSONErrorsPar,
-) -> impl ParallelIterator<Item = IdJSON> + 'a + use<'a> {
+) -> impl ParallelIterator<Item = IdJSON> + use<'a> {
     let receiver = receiver.into_iter().indexed();
     parse_ndjson_iter_par(args, receiver, errors)
 }
@@ -281,7 +281,7 @@ pub fn parse_ndjson_bufreader_par<'a>(
     args: &Cli,
     file_path: &PathBuf,
     errors: &'a NDJSONErrorsPar,
-) -> Result<impl ParallelIterator<Item = IdJSON> + 'a + use<'a>, NDJSONError> {
+) -> Result<impl ParallelIterator<Item = IdJSON> + use<'a>, NDJSONError> {
     let reader = get_bufreader(args, file_path)?;
 
     let iter = reader.lines().enumerate();
