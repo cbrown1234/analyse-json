@@ -93,7 +93,7 @@ pub struct Settings {
 }
 
 impl Settings {
-    fn init(args: Cli) -> Result<Self> {
+    pub fn init(args: Cli) -> Result<Self> {
         let jsonpath_selector = args.jsonpath_selector()?;
         Ok(Self {
             args,
