@@ -304,7 +304,7 @@ pub fn parse_ndjson_iter_par<'a, I>(
     errors: &'a NDJSONErrorsPar,
 ) -> impl ParallelIterator<Item = IdJSON> + use<'a, I>
 where
-    I: Iterator<Item = IJSONCandidate> + Send + 'a,
+    I: Iterator<Item = IJSONCandidate> + Send,
 {
     let iter = iter.take(args.lines.unwrap_or(usize::MAX));
 
