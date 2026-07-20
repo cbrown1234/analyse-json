@@ -102,6 +102,17 @@ impl<'a, T: Iterator<Item = io::Result<String>> + Send + 'a> ToNDJSONPar<'a> for
     }
 }
 
+/// Progress spinner for the processing loops, hidden when `--quiet` is set
+fn progress_spinner(args: &Cli) -> ProgressBar {
+    if args.quiet {
+        return ProgressBar::hidden();
+    }
+    ProgressBar::new_spinner().with_style(
+        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
+            .unwrap(),
+    )
+}
+
 // TODO: Consider switching to match _par implementation without Box<_> (needs benchmarking)
 /// Handles the jsonpath query expansion of the Iterators values. Single threaded
 ///
@@ -485,10 +496,7 @@ pub fn process_json_result_iterable(
     let json_iter = limit(args, json_iter);
     let json_iter = expand_jsonpath_query_result(settings, json_iter);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = progress_spinner(args);
 
     let mut path_type = String::with_capacity(100);
     for (id, json_result) in json_iter {
@@ -543,10 +551,7 @@ pub fn process_json_iterable(
 
     let json_iter = apply_settings(settings, json_iter, errors);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = progress_spinner(args);
 
     for (_id, json) in json_iter {
         spinner.inc(1);
@@ -594,10 +599,7 @@ pub fn process_json_result_iterable_par<'a>(
 
     let json_iter = expand_jsonpath_query_result_par(settings, json_iter);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = progress_spinner(args);
 
     let bad_lines = Mutex::new(Vec::default());
     let empty_lines = Mutex::new(Vec::default());
@@ -667,10 +669,7 @@ pub fn process_json_iterable_par<'a>(
 
     let json_iter = apply_settings_par(settings, json_iter, errors);
 
-    let spinner = ProgressBar::new_spinner().with_style(
-        ProgressStyle::with_template("{spinner} {elapsed_precise} Lines: {pos:>10}\t{per_sec}\n")
-            .unwrap(),
-    );
+    let spinner = progress_spinner(args);
 
     json_iter.for_each(|(_id, json)| {
         line_count.fetch_add(1, Ordering::Release);

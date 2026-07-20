@@ -64,7 +64,7 @@ pub struct Cli {
     #[clap(long)]
     parallel: bool,
 
-    /// Silence error logging
+    /// Silence progress and timing output
     #[clap(short, long)]
     quiet: bool,
 
@@ -176,6 +176,7 @@ fn print_completions(args: Cli) {
 pub fn run(args: Cli) -> Result<()> {
     let now = Instant::now();
     let settings = Settings::init(args).context("Failed to initialise settings from CLI args")?;
+    let quiet = settings.args.quiet;
     if settings.args.generate_completions.is_some() {
         print_completions(settings.args);
         return Ok(());
@@ -188,7 +189,9 @@ pub fn run(args: Cli) -> Result<()> {
     } else {
         run_no_stdin(settings).context("Failed to process file(s)")?;
     }
-    eprintln!("Completed in {}", format_duration(now.elapsed()));
+    if !quiet {
+        eprintln!("Completed in {}", format_duration(now.elapsed()));
+    }
     Ok(())
 }
 
