@@ -9,7 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 
 - Corrected MSRV
-- Clippy lints
+- Clippy lints (elided lifetimes, `field_reassign_with_default`, `useless_vec`)
 
 ## [0.6.1] - 2024-01-20
 

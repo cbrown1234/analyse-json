@@ -862,8 +862,10 @@ mod tests {
             empty_lines: vec![],
         };
 
-        let mut args = Cli::default();
-        args.parallel = true;
+        let args = Cli {
+            parallel: true,
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
 
         let actual = path.json_stats(&settings).unwrap();
@@ -924,8 +926,10 @@ mod tests {
         ];
         let json_iter_in = json_iter_in.iter().cloned();
 
-        let mut args = Cli::default();
-        args.jsonpath = Some("$.key1[*]".to_string());
+        let args = Cli {
+            jsonpath: Some("$.key1[*]".to_string()),
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
         let errors = Errors::default();
 
@@ -1005,8 +1009,10 @@ mod tests {
         ];
         let json_iter_in = json_iter_in.iter().cloned();
 
-        let mut args = Cli::default();
-        args.jsonpath = Some("$.key1".to_string());
+        let args = Cli {
+            jsonpath: Some("$.key1".to_string()),
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
         let errors = Errors::default();
 
@@ -1032,8 +1038,10 @@ mod tests {
         ];
         let json_iter_in = json_iter_in.into_iter();
 
-        let mut args = Cli::default();
-        args.jsonpath = Some("$.key1".to_string());
+        let args = Cli {
+            jsonpath: Some("$.key1".to_string()),
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
 
         let expected = Stats {
@@ -1091,8 +1099,10 @@ mod tests {
             ..Default::default()
         };
 
-        let mut args = Cli::default();
-        args.jsonpath = Some("$.a".to_string());
+        let args = Cli {
+            jsonpath: Some("$.a".to_string()),
+            ..Default::default()
+        };
         let settings = Settings::init(args).unwrap();
         let errors = ErrorsPar::default();
         let mut stats = process_json_iterable_par(&settings, iter, &errors);
@@ -1148,7 +1158,7 @@ mod tests {
             empty_lines: vec!["file/1.json:5".to_string(), "file/2.json:2".to_string()],
         };
 
-        let vec_of_file_stats = vec![lhs.clone(), rhs.clone()];
+        let vec_of_file_stats = [lhs.clone(), rhs.clone()];
         let actual_ref = lhs.clone() + &rhs;
         let actual = lhs + rhs;
 
