@@ -3,7 +3,7 @@ name = "analyse-json"
 version = "0.6.1"
 authors = ["Chris Brown <cbrown1234@hotmail.co.uk>"]
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.86"
 license = "MIT"
 readme = "README.md"
 description = """
@@ -43,6 +43,11 @@ serde_json_path = "0.7.2"
 
 [dev-dependencies]
 tempfile = "3"
+criterion = "0.8"
+
+[[bench]]
+name = "json_stats"
+harness = false
 
 [profile.profiling]
 inherits = "release"
