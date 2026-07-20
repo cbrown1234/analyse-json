@@ -471,7 +471,7 @@ pub fn apply_settings_par<'a>(
     expand_jsonpath_query_par(settings, json_iter, errors)
 }
 
-/// Main function processing the JSON data, collecting key infomation about the content.
+/// Main function processing the JSON data, collecting key information about the content.
 /// Single threaded.
 ///
 /// See also [`process_json_result_iterable_par`]
@@ -529,7 +529,7 @@ pub fn process_json_result_iterable(
     fs
 }
 
-/// Main function processing the JSON data, collecting key infomation about the content.
+/// Main function processing the JSON data, collecting key information about the content.
 /// Single threaded.
 ///
 /// See also [`process_json_iterable_par`]
@@ -649,8 +649,8 @@ pub fn process_json_result_iterable_par<'a>(
     fs
 }
 
-/// Main function processing the JSON data, collecting key infomation about the content.
-/// Mulit-threaded version of [`process_json_iterable`].
+/// Main function processing the JSON data, collecting key information about the content.
+/// Multi-threaded version of [`process_json_iterable`].
 ///
 /// See also [`process_json_iterable_par`]
 pub fn process_json_iterable_par<'a>(

@@ -29,14 +29,14 @@ impl Stats {
         }
     }
 
-    pub fn key_occurance(&self) -> IndexMap<String, f64> {
+    pub fn key_occurrence(&self) -> IndexMap<String, f64> {
         self.keys_count
             .iter()
             .map(|(k, v)| (k.to_owned(), 100f64 * *v as f64 / self.line_count as f64))
             .collect()
     }
 
-    pub fn key_type_occurance(&self) -> IndexMap<String, f64> {
+    pub fn key_type_occurrence(&self) -> IndexMap<String, f64> {
         self.keys_types_count
             .iter()
             .map(|(k, v)| (k.to_owned(), 100f64 * *v as f64 / self.line_count as f64))
@@ -48,13 +48,13 @@ impl fmt::Display for Stats {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let stream = Stream::Stdout;
         writeln!(f, "Keys:\n{:#?}\n", self.keys_count.keys())?;
-        writeln!(f, "Key occurance counts:\n{:#?}", self.keys_count)?;
-        writeln!(f, "\nKey occurance rate:")?;
-        for (k, v) in self.key_occurance() {
+        writeln!(f, "Key occurrence counts:\n{:#?}", self.keys_count)?;
+        writeln!(f, "\nKey occurrence rate:")?;
+        for (k, v) in self.key_occurrence() {
             writeln!(f, "{}: {:.3}%", k, v)?;
         }
-        writeln!(f, "\nKey type occurance rate:")?;
-        for (k, v) in self.key_type_occurance() {
+        writeln!(f, "\nKey type occurrence rate:")?;
+        for (k, v) in self.key_type_occurrence() {
             writeln!(f, "{}: {:.3}%", k, v)?;
         }
         if !self.bad_lines.is_empty() {
