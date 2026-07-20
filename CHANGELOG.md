@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased] - ReleaseDate
 
+### Added
+
+- GitHub Actions CI (tests, rustfmt, clippy, MSRV check)
+
 ### Changed
 
 - Migrated to Rust edition 2024 (MSRV is now 1.85)
