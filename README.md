@@ -16,7 +16,7 @@ Options:
       --explode-arrays                Walk the elements of arrays treating arrays like a map of their enumerated elements? (E.g. $.path.to.array[0], $.path.to.array[1], ...) See also `--inspect-arrays`
       --merge                         Include combined results for all files when using glob
       --parallel                      Use multi-threaded version of the processing
-  -q, --quiet                         Silence error logging
+  -q, --quiet                         Silence progress and timing output
       --generate-completions <SHELL>  Output shell completions for the chosen shell to stdout [possible values: bash, elvish, fish, powershell, zsh]
   -h, --help                          Print help
   -V, --version                       Print version

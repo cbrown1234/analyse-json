@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Migrated to Rust edition 2024 (MSRV is now 1.85)
+- `--quiet` now silences the progress spinner and timing output (it had become a no-op after the result-iterator refactor)
 - Renamed `Stats::key_occurance`/`key_type_occurance` to `key_occurrence`/`key_type_occurrence` (typo fix, breaking for library users)
 
 ### Fixed
